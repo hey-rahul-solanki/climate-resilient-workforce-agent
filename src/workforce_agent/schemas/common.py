@@ -125,3 +125,23 @@ class ScheduleDecision(StrEnum):
 class MissingWeatherAction(StrEnum):
     BLOCK = "block"
     REQUIRE_REVIEW = "require_review"
+
+
+class RuleSeverity(StrEnum):
+    ADVISORY = "advisory"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
+class PolicyAction(StrEnum):
+    PROCEED = "proceed"
+    NOTIFY = "notify"
+    EXTRA_BREAKS = "extra_breaks"
+    RESCHEDULE = "reschedule"
+    STOP_WORK = "stop_work"
+    BLOCK = "block"
+    REQUIRE_REVIEW = "require_review"
+
+
+RuleAction = PolicyAction
+

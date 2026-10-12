@@ -2,7 +2,12 @@
 
 from workforce_agent.schemas import (
     Equipment,
+    OperationalConstraint,
+    PolicyAction,
+    RuleAction,
+    RuleSeverity,
     SafetyPolicy,
+    SafetyRule,
     ScheduleAssignment,
     ScheduleProposal,
     Site,
@@ -13,7 +18,12 @@ from workforce_agent.schemas import (
 
 __all__ = [
     "Equipment",
+    "OperationalConstraint",
+    "PolicyAction",
+    "RuleAction",
+    "RuleSeverity",
     "SafetyPolicy",
+    "SafetyRule",
     "ScheduleAssignment",
     "ScheduleProposal",
     "Site",

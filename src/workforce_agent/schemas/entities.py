@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 from uuid import uuid4
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -13,13 +14,17 @@ from workforce_agent.schemas.common import (
     MissingWeatherAction,
     OperatingHours,
     OperationalStatus,
+    PolicyAction,
     Priority,
+    RuleAction,
+    RuleSeverity,
     ScheduleDecision,
     SiteHazard,
     StrictModel,
     TimeWindow,
     validate_iana_timezone,
 )
+
 
 
 class Worker(StrictModel):
@@ -70,8 +75,12 @@ class WorkOrder(StrictModel):
     planning_window: TimeWindow
     deadline: datetime | None = None
     exposure_type: ExposureType
-    expected_exposure_duration_minutes: int = Field(..., gt=0)
+    expected_exposure_duration_minutes: int = Field(..., ge=0)
     exposure_windows: list[TimeWindow] | None = None
+    is_weather_exposed: bool | None = Field(
+        default=None,
+        description="Whether the task is weather-exposed. Inferred from exposure_type if omitted.",
+    )
 
     @field_validator("required_skills", "required_certifications", "depends_on", "required_equipment_ids")
     @classmethod
@@ -100,6 +109,17 @@ class WorkOrder(StrictModel):
             raise ValueError("expected_exposure_duration_minutes cannot exceed duration_minutes")
         if self.deadline is not None and self.deadline < self.planning_window.start:
             raise ValueError("deadline cannot be before planning_window.start")
+
+        outdoor_types = {ExposureType.OUTDOOR_HEAT, ExposureType.OUTDOOR_STORM}
+        if self.is_weather_exposed is None:
+            object.__setattr__(self, "is_weather_exposed", self.exposure_type in outdoor_types)
+        else:
+            if self.is_weather_exposed and self.exposure_type == ExposureType.INDOOR_CONTROLLED:
+                raise ValueError("indoor_controlled work order cannot be weather-exposed")
+            if not self.is_weather_exposed and self.exposure_type in outdoor_types:
+                raise ValueError(
+                    f"work order with exposure_type '{self.exposure_type}' cannot have is_weather_exposed=False"
+                )
         return self
 
 
@@ -110,6 +130,11 @@ class Equipment(StrictModel):
     operational_status: OperationalStatus
     compatible_task_types: list[str] = Field(..., min_length=1)
     inspection_valid_until: datetime | None = None
+    site_id: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Site ID where equipment is stationed, where applicable.",
+    )
 
     @field_validator("compatible_task_types")
     @classmethod
@@ -286,12 +311,28 @@ class WorkRestRule(StrictModel):
     work_minutes: int = Field(..., ge=0)
     rest_minutes: int = Field(..., ge=0)
     cooling_required: bool
+    severity: RuleSeverity = RuleSeverity.WARNING
+    required_action: PolicyAction = PolicyAction.EXTRA_BREAKS
 
     @model_validator(mode="after")
     def band_order(self) -> WorkRestRule:
         if self.max_c <= self.min_c:
             raise ValueError("max_c must be greater than min_c")
         return self
+
+
+class SafetyRule(StrictModel):
+    rule_id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    severity: RuleSeverity
+    required_action: PolicyAction
+    description: str | None = None
+    rule_type: str | None = None
+    condition: str | None = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+OperationalConstraint = SafetyRule
 
 
 class SafetyPolicy(StrictModel):
@@ -301,6 +342,8 @@ class SafetyPolicy(StrictModel):
     applies_to_exposure_types: list[ExposureType] = Field(..., min_length=1)
     heat_thresholds: list[HeatThreshold] = Field(..., min_length=1)
     work_rest_rules: list[WorkRestRule]
+    rules: list[SafetyRule] = Field(default_factory=list)
+    operational_constraints: list[SafetyRule] = Field(default_factory=list)
     max_wind_speed_ms: float | None = Field(default=None, gt=0)
     max_precipitation_mm: float | None = Field(default=None, ge=0)
     lightning_prohibits_work: bool
