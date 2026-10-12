@@ -1,0 +1,6 @@
+﻿Work Order ID,Task,Site ID,Priority,Duration (minutes),Required Skills,Required Certifications,Crew Size (min–max),Dependencies,Required Equipment IDs,Planning Window (local time),Exposure Type,Exposure Duration (minutes),Notes
+WO-101,Inspect process-water pump,VAD-PLANT-01,High,90,Mechanical maintenance; Pump inspection,None,2–2,None,EQ-MECH-01,13 Oct 2026 06:00–14:00,Mixed indoor/outdoor,45,Baseline task
+WO-102,Repair pump coupling,VAD-PLANT-01,Critical,120,Mechanical maintenance; Lockout/tagout,Lockout/tagout,2–3,WO-101,EQ-MECH-01,13 Oct 2026 06:00–18:00,Outdoor,90,Must follow WO-101
+WO-103,Inspect substation connections,VAD-SUB-02,High,75,Electrical maintenance; Substation inspection,Electrical safety,1–2,None,EQ-ELEC-01,13 Oct 2026 07:00–19:00,Outdoor,60,Electrical certification required
+WO-104,Inspect pipeline access chamber,VAD-PIPE-03,Medium,120,Pipeline inspection; Confined-space entry,Confined-space entry,2–2,None,EQ-PIPE-01,13 Oct 2026 05:30–17:30,Mixed indoor/outdoor,30,Intentionally infeasible: required equipment is under maintenance
+WO-105,Routine site housekeeping inspection,VAD-PLANT-01,Low,45,General maintenance,None,1–2,None,None,13 Oct 2026 06:00–14:00,Outdoor,30,Low-priority baseline task

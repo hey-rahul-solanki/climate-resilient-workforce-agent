@@ -1,0 +1,4 @@
+﻿Policy ID,Version,Policy Name,Hazard,Metric,Rule,Unit,Severity,Required Action,Applies To,Notes
+POLICY-DEMO-001,0.1.0,Illustrative Heat and Weather Policy,Heat,Apparent temperature,>= 38,°C,Blocking,Reschedule,Outdoor and mixed-exposure tasks,Illustrative test threshold only; not an approved safety limit
+POLICY-DEMO-001,0.1.0,Illustrative Heat and Weather Policy,High wind,Wind gusts,>= 15,m/s,Blocking,Suspend work,Sites with height/high-wind hazards,Illustrative test threshold only; not an approved safety limit
+POLICY-DEMO-001,0.1.0,Illustrative Heat and Weather Policy,Missing weather,Forecast coverage,No coverage,N/A,Blocking,Require human review,Outdoor and mixed-exposure tasks,Fail closed when required weather data is missing

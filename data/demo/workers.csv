@@ -1,0 +1,6 @@
+﻿Worker ID,Display Name,Skills,Certifications,Shift Availability (local time),Work Minutes Before Break,Break Duration (minutes),Max Continuous Exposure (minutes),Max Work Minutes per Shift
+WRK-001,Synthetic Worker 001,Mechanical maintenance; Pump inspection; Working at height,Working at height,Tue 13 Oct 2026 06:00–14:00; Wed 14 Oct 2026 06:00–14:00,120,15,90,420
+WRK-002,Synthetic Worker 002,Electrical maintenance; Substation inspection,Electrical safety,Tue 13 Oct 2026 07:00–15:00; Wed 14 Oct 2026 07:00–15:00,120,15,90,420
+WRK-003,Synthetic Worker 003,Mechanical maintenance; Electrical maintenance; Lockout/tagout,Lockout/tagout,Tue 13 Oct 2026 06:00–14:00,120,15,90,420
+WRK-004,Synthetic Worker 004,Pipeline inspection; Confined-space entry,Confined-space entry,Tue 13 Oct 2026 05:30–13:30,90,20,60,400
+WRK-005,Synthetic Worker 005,General maintenance; Site safety,Site safety induction,Tue 13 Oct 2026 06:00–14:00; Wed 14 Oct 2026 06:00–14:00,120,15,90,420
