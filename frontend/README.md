@@ -95,3 +95,14 @@ The frontend interacts with the backend using the service client in `src/service
 - **Health Probing**: Performs non-blocking health checks against `GET /health`.
 - **Domain Modeling**: Types in `src/types/workforce.ts` directly reflect Python Pydantic v2 schemas from `src/workforce_agent/schemas/`.
 - **Standalone Capability**: When no backend server is active, the UI gracefully operates in standalone mode, allowing inspection of facility locations, weather rules, and policy thresholds without mock falsification.
+
+### Starting the Python FastAPI Backend
+
+To run the backend server alongside the frontend, run from the repository root:
+
+```bash
+# In the root repository directory (with virtual environment active):
+uvicorn workforce_agent.api:app --host 0.0.0.0 --port 8000 --reload
+# Or using the installed CLI entrypoint:
+workforce-api
+```

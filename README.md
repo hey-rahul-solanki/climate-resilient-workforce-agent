@@ -51,7 +51,37 @@ workforce-weather --location-id vadodara-gujarat --site-id VAD-PLANT-01 --foreca
 
 Add another geography by placing a JSON file next to `src/workforce_agent/locations/vadodara.json`.
 
-### 4. Running Python Tests
+### 4. Starting the FastAPI Backend Server
+
+Install the API dependencies (FastAPI and Uvicorn):
+
+```bash
+pip install -e ".[dev,api]"
+```
+
+Start the FastAPI server:
+
+```bash
+# Option 1: Using uvicorn with live auto-reload
+uvicorn workforce_agent.api:app --host 0.0.0.0 --port 8000 --reload
+
+# Option 2: Using the CLI entrypoint
+workforce-api
+
+# Option 3: Running the Python module directly
+python -m workforce_agent.api
+```
+
+Once started:
+- **API Base URL**: [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
+- **Sites API**: [http://localhost:8000/api/sites](http://localhost:8000/api/sites)
+- **Weather API**: [http://localhost:8000/api/weather/VAD-PLANT-01?forecast_days=3](http://localhost:8000/api/weather/VAD-PLANT-01?forecast_days=3)
+
+CORS is enabled by default to allow communication with the frontend development server at [http://localhost:5173](http://localhost:5173).
+
+### 5. Running Python Tests
 
 Run the test suite:
 
@@ -64,6 +94,7 @@ Run optional live network tests calling Open-Meteo:
 ```bash
 pytest -m network
 ```
+
 
 ---
 
