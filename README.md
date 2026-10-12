@@ -4,7 +4,13 @@ AI-powered workforce scheduling that combines real-time weather intelligence, op
 
 The first milestone is the planning data contract and weather ingestion. Location catalogs are data, not code: Vadodara, Gujarat is the demo catalog, and additional sites can be added as JSON without changing the weather client.
 
-## Setup
+A companion modern React + Vite frontend is located in `frontend/` to monitor sites, inspect weather ingestion parameters, and visualize schedule safety policies.
+
+---
+
+## Python Backend Setup & Testing
+
+### 1. Environment Setup
 
 ```bash
 python -m venv .venv
@@ -12,7 +18,9 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-## Data contracts
+*(Alternatively, if using `uv`: `uv run --extra dev pytest`)*
+
+### 2. Data Contracts
 
 Validated Pydantic v2 models live in `src/workforce_agent/schemas`:
 
@@ -23,7 +31,7 @@ Validated Pydantic v2 models live in `src/workforce_agent/schemas`:
 
 Required planning fields have no silent defaults. Invalid or missing values raise actionable `ValidationError`s.
 
-## Weather
+### 3. Weather Ingestion
 
 Open-Meteo is the default provider. Forecasts are normalized to `WeatherForecast`, including completeness and staleness flags. Missing values are preserved as `null` and never treated as safe working conditions.
 
@@ -43,9 +51,101 @@ workforce-weather --location-id vadodara-gujarat --site-id VAD-PLANT-01 --foreca
 
 Add another geography by placing a JSON file next to `src/workforce_agent/locations/vadodara.json`.
 
-## Tests
+### 4. Running Python Tests
+
+Run the test suite:
 
 ```bash
 pytest
-pytest -m network   # optional live Open-Meteo call
 ```
+
+Run optional live network tests calling Open-Meteo:
+
+```bash
+pytest -m network
+```
+
+---
+
+## Frontend Setup & Development
+
+The frontend is a standalone React + Vite + TypeScript application in `frontend/`.
+
+### 1. Installing Frontend Dependencies
+
+```bash
+cd frontend
+npm install
+```
+
+### 2. Configuring the Backend API URL
+
+The frontend communicates with the Python backend via the `VITE_API_BASE_URL` environment variable.
+
+Create a `.env` file from the example template:
+
+```bash
+cd frontend
+cp .env.example .env
+```
+
+Default configuration in `frontend/.env`:
+
+```env
+# URL where your Python API server will run
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+You can change this URL to any running backend host or port.
+
+### 3. Starting the React Development Server
+
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend will be available at [http://localhost:5173](http://localhost:5173).
+
+> **Independent Operation:** The frontend can run completely independently in standalone mode. When the Python backend is offline or not yet started, the UI displays clear connection diagnostics and defaults to local location catalog data without throwing unhandled errors or fabricating mock backend responses.
+
+### 4. Building the Frontend for Production
+
+```bash
+cd frontend
+npm run build
+```
+
+Production build artifacts will be generated in `frontend/dist/`.
+
+To test or preview the production build locally:
+
+```bash
+npm run preview
+```
+
+---
+
+## Frontend & Backend Communication
+
+The project uses a clean, decoupled architecture:
+
+```text
+┌─────────────────────────────────┐           HTTP / REST           ┌───────────────────────────────────┐
+│       React + Vite Frontend     │  ◄────────────────────────────► │           Python Backend          │
+│   (frontend/src/services/api.ts)│  VITE_API_BASE_URL=http://...   │      (workforce_agent core)       │
+└─────────────────────────────────┘                                 └───────────────────────────────────┘
+               │                                                                      │
+        TypeScript Types                                                       Pydantic Models
+ (frontend/src/types/workforce.ts) ◄───────── Synchronized Contract ────────► (src/workforce_agent/schemas/)
+```
+
+1. **Decoupled Lifecycle**: The Python core handles data validation, weather ingestion, and schedule optimization. The React frontend handles user visualization, site overview, and schedule monitoring.
+2. **Synchronized Types**: TypeScript interfaces in `frontend/src/types/workforce.ts` mirror the Pydantic v2 models in `src/workforce_agent/schemas/` (`Site`, `Worker`, `WeatherForecast`, `ScheduleProposal`).
+3. **HTTP Client**: The frontend API service (`frontend/src/services/api.ts`) contains typed request functions and non-blocking health checks (`checkBackendHealth()`).
+4. **Planned Endpoints**:
+   - `GET /health`: Liveness probe and version check.
+   - `GET /api/sites`: Returns registered industrial facility sites.
+   - `GET /api/weather/{site_id}?forecast_days=3`: Returns normalized hourly forecast.
+   - `GET /api/workers`: Returns worker skills and availability.
+   - `POST /api/schedules/proposals`: Triggers agent schedule optimization.
