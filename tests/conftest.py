@@ -11,6 +11,8 @@ from workforce_agent.schemas import Site, TimeWindow
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 OPEN_METEO_FIXTURE = FIXTURE_DIR / "open_meteo_vadodara.json"
+SAVED_FORECAST_FIXTURE = FIXTURE_DIR / "vadodara_forecast_3day.json"
+OUT_TXT = Path(__file__).parent.parent / "out.txt"
 IST = ZoneInfo("Asia/Kolkata")
 
 

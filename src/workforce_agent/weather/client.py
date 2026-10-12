@@ -10,9 +10,14 @@ import httpx
 from workforce_agent.config import Settings, get_settings
 from workforce_agent.schemas import Site, TimeWindow, WeatherForecast
 from workforce_agent.weather.exceptions import WeatherUnavailableError
-from workforce_agent.weather.mapper import HOURLY_VARIABLE_MAP, map_open_meteo_forecast
+from workforce_agent.weather.mapper import (
+    DAILY_VARIABLE_MAP,
+    HOURLY_VARIABLE_MAP,
+    map_open_meteo_forecast,
+)
 
 DEFAULT_HOURLY = ",".join(HOURLY_VARIABLE_MAP.keys())
+DEFAULT_DAILY = ",".join(DAILY_VARIABLE_MAP.keys())
 
 
 class WeatherClient(Protocol):
@@ -62,6 +67,7 @@ class OpenMeteoClient:
             "wind_speed_unit": "ms",
             "precipitation_unit": "mm",
             "hourly": DEFAULT_HOURLY,
+            "daily": DEFAULT_DAILY,
             "current": "temperature_2m",
         }
         try:
@@ -118,12 +124,14 @@ class FixtureWeatherClient:
         if forecast_days:
             limit = forecast_days * 24
             hourly = forecast.hourly[:limit]
+            daily = forecast.daily[:forecast_days] if forecast.daily else []
             if hourly:
                 forecast = forecast.model_copy(
                     update={
                         "hourly": hourly,
-                        "valid_from": hourly[0].observed_at,
-                        "valid_until": hourly[-1].observed_at + timedelta(hours=1),
+                        "daily": daily,
+                        "valid_from": hourly[0].valid_at,
+                        "valid_until": hourly[-1].valid_at + timedelta(hours=1),
                     }
                 )
         return forecast

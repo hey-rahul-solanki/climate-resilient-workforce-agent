@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import uuid4
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from workforce_agent.schemas.common import (
     BreakRequirements,
@@ -132,6 +132,7 @@ class Equipment(StrictModel):
 class HourlyWeather(StrictModel):
     valid_at: datetime = Field(
         ...,
+        validation_alias=AliasChoices("valid_at", "observed_at"),
         description="UTC start of the hour these forecast values are valid for. Not an observation time.",
     )
     temperature_c: float | None = Field(default=None, description="Air temperature at 2 m, Celsius.")
@@ -193,6 +194,11 @@ class HourlyWeather(StrictModel):
         )
         return [name for name in required if getattr(self, name) is None]
 
+    @property
+    def observed_at(self) -> datetime:
+        """Alias for valid_at for backward compatibility."""
+        return self.valid_at
+
 
 class DailyWeather(StrictModel):
     valid_on: date = Field(..., description="Local calendar date for these daily aggregates.")
@@ -215,7 +221,7 @@ class WeatherDataQuality(StrictModel):
     covers_requested_window: bool
     missing_variables: list[str]
     incomplete_hour_count: int = Field(..., ge=0)
-    past_hour_count: int = Field(..., ge=0)
+    past_hour_count: int = Field(default=0, ge=0)
     notes: list[str]
 
 
@@ -250,7 +256,14 @@ class WeatherForecast(StrictModel):
     def validity_order(self) -> WeatherForecast:
         if self.valid_until <= self.valid_from:
             raise ValueError("valid_until must be after valid_from")
+        for i in range(1, len(self.hourly)):
+            if self.hourly[i].valid_at <= self.hourly[i - 1].valid_at:
+                raise ValueError("hourly timestamps must be strictly monotonically increasing")
         return self
+
+    def future_hourly(self) -> list[HourlyWeather]:
+        """Return hourly forecast slots that begin at or after issued_at."""
+        return [h for h in self.hourly if h.valid_at >= self.issued_at]
 
 
 class HeatThreshold(StrictModel):

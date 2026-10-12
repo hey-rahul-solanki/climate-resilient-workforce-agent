@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
 from workforce_agent.schemas import (
+    DailyWeather,
     HourlyWeather,
     Site,
     TimeWindow,
@@ -37,9 +38,19 @@ REQUIRED_HOURLY_VARIABLES = (
     "wind_speed_10m",
 )
 
+DAILY_VARIABLE_MAP = {
+    "temperature_2m_max": "temperature_max_c",
+    "temperature_2m_min": "temperature_min_c",
+    "precipitation_sum": "precipitation_sum_mm",
+    "shortwave_radiation_sum": "shortwave_radiation_sum_mj_m2",
+}
+
 
 def parse_provider_time(value: str, tz: ZoneInfo) -> datetime:
-    parsed = datetime.fromisoformat(value)
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise WeatherIncompleteError(f"invalid provider timestamp: {value!r}") from exc
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=tz)
     return parsed.astimezone(tz)
@@ -93,7 +104,14 @@ def map_open_meteo_forecast(
 
     tz_name = payload.get("timezone") or site.timezone
     tz = zoneinfo_of(tz_name)
-    observed_at = [parse_provider_time(item, tz) for item in times]
+    valid_times = [parse_provider_time(item, tz) for item in times]
+
+    for i in range(1, len(valid_times)):
+        if valid_times[i] <= valid_times[i - 1]:
+            raise WeatherIncompleteError(
+                f"Open-Meteo hourly.time series contains non-chronological or duplicate timestamps: "
+                f"{times[i - 1]} -> {times[i]}"
+            )
 
     missing_variables = [name for name in REQUIRED_HOURLY_VARIABLES if name not in hourly]
     series = {
@@ -103,19 +121,22 @@ def map_open_meteo_forecast(
 
     hours: list[HourlyWeather] = []
     incomplete_hour_count = 0
-    for index, timestamp in enumerate(observed_at):
+    for index, timestamp in enumerate(valid_times):
         fields = {
             model_field: series[provider_name][index]
             for provider_name, model_field in HOURLY_VARIABLE_MAP.items()
         }
-        hour = HourlyWeather(observed_at=timestamp.astimezone(timezone.utc), **fields)
+        hour = HourlyWeather(valid_at=timestamp.astimezone(timezone.utc), **fields)
         if hour.missing_fields():
             incomplete_hour_count += 1
         hours.append(hour)
 
-    valid_from = hours[0].observed_at
-    last_hour = hours[-1].observed_at
+    valid_from = hours[0].valid_at
+    last_hour = hours[-1].valid_at
     valid_until = last_hour + timedelta(hours=1)
+
+    issued = issued_at.astimezone(timezone.utc)
+    past_hour_count = sum(1 for h in hours if h.valid_at < issued)
 
     covers_requested = True
     notes: list[str] = []
@@ -126,7 +147,6 @@ def map_open_meteo_forecast(
         if not covers_requested:
             notes.append("forecast does not fully cover the requested planning window")
 
-    issued = issued_at.astimezone(timezone.utc)
     is_stale, stale_note = _staleness(payload, last_hour, issued, tz, stale_after)
     if stale_note:
         notes.append(stale_note)
@@ -135,6 +155,8 @@ def map_open_meteo_forecast(
         notes.append("missing required hourly variables: " + ", ".join(missing_variables))
     if incomplete_hour_count:
         notes.append(f"{incomplete_hour_count} hourly slots have null required fields")
+    if past_hour_count:
+        notes.append(f"{past_hour_count} hourly slots precede issued_at (elapsed on local calendar day)")
 
     is_complete = not missing_variables and incomplete_hour_count == 0
     quality = WeatherDataQuality(
@@ -143,8 +165,31 @@ def map_open_meteo_forecast(
         covers_requested_window=covers_requested,
         missing_variables=missing_variables,
         incomplete_hour_count=incomplete_hour_count,
+        past_hour_count=past_hour_count,
         notes=notes,
     )
+
+    daily_models: list[DailyWeather] = []
+    daily = payload.get("daily")
+    if isinstance(daily, Mapping) and "time" in daily:
+        daily_times = daily["time"]
+        if isinstance(daily_times, Sequence):
+            daily_series = {
+                provider_name: _series(daily, provider_name, len(daily_times))
+                for provider_name in DAILY_VARIABLE_MAP
+            }
+            for idx, date_item in enumerate(daily_times):
+                valid_date = (
+                    date_item
+                    if isinstance(date_item, date)
+                    else date.fromisoformat(str(date_item))
+                )
+                daily_fields = {
+                    model_field: daily_series[provider_name][idx]
+                    for provider_name, model_field in DAILY_VARIABLE_MAP.items()
+                }
+                daily_models.append(DailyWeather(valid_on=valid_date, **daily_fields))
+
     return WeatherForecast(
         site_id=site.site_id,
         issued_at=issued,
@@ -152,5 +197,6 @@ def map_open_meteo_forecast(
         valid_from=valid_from,
         valid_until=valid_until,
         hourly=hours,
+        daily=daily_models,
         quality=quality,
     )
