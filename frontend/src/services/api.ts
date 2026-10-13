@@ -1,0 +1,180 @@
+/**
+ * Frontend API service module for communicating with the Python backend.
+ *
+ * Configured via the `VITE_API_BASE_URL` Vite environment variable.
+ * Fallback default is http://localhost:8000.
+ */
+
+import type {
+  ApiResponse,
+  BackendHealth,
+  LocationCatalog,
+  ScheduleProposal,
+  Site,
+  WeatherForecast,
+  Worker,
+} from '../types';
+
+/**
+ * Returns the configured base URL for the backend API.
+ */
+export function getApiBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (typeof envUrl === 'string' && envUrl.trim() !== '') {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+  return 'http://localhost:8000';
+}
+
+/**
+ * Checks connectivity to the backend API.
+ * Does not assume any mock data; performs a genuine health probe.
+ */
+export async function checkBackendHealth(timeoutMs = 4000): Promise<BackendHealth> {
+  const baseUrl = getApiBaseUrl();
+  const timestamp = new Date().toISOString();
+  const startTime = performance.now();
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${baseUrl}/health`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    const latencyMs = Math.round(performance.now() - startTime);
+
+    if (response.ok) {
+      let data: Record<string, unknown> = {};
+      try {
+        data = (await response.json()) as Record<string, unknown>;
+      } catch {
+        // Response was ok but not JSON
+      }
+
+      return {
+        status: 'connected',
+        url: baseUrl,
+        timestamp,
+        latencyMs,
+        message: 'Backend is reachable and responding.',
+        version: typeof data.version === 'string' ? data.version : undefined,
+      };
+    }
+
+    return {
+      status: 'disconnected',
+      url: baseUrl,
+      timestamp,
+      latencyMs,
+      message: `Backend returned HTTP status ${response.status} (${response.statusText}).`,
+    };
+  } catch (err: unknown) {
+    clearTimeout(timeoutId);
+    const latencyMs = Math.round(performance.now() - startTime);
+    const errorMsg =
+      err instanceof DOMException && err.name === 'AbortError'
+        ? `Connection timed out after ${timeoutMs}ms`
+        : err instanceof Error
+          ? err.message
+          : 'Unable to reach backend service';
+
+    return {
+      status: 'disconnected',
+      url: baseUrl,
+      timestamp,
+      latencyMs,
+      message: `${errorMsg}. Ensure the Python API service is running at ${baseUrl}.`,
+    };
+  }
+}
+
+/**
+ * Base HTTP request wrapper for future backend endpoints.
+ */
+export async function apiRequest<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<ApiResponse<T>> {
+  const baseUrl = getApiBaseUrl();
+  const normalizedPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${baseUrl}${normalizedPath}`;
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    ...options.headers,
+  };
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP error ${response.status}: ${response.statusText}`;
+      try {
+        const errorBody = (await response.json()) as { message?: string; detail?: string };
+        if (errorBody.message) errorMessage = errorBody.message;
+        else if (errorBody.detail) errorMessage = errorBody.detail;
+      } catch {
+        // Non-JSON error body
+      }
+      return {
+        status: response.status,
+        error: errorMessage,
+      };
+    }
+
+    const data = (await response.json()) as T;
+    return {
+      status: response.status,
+      data,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Network request failed';
+    return {
+      status: 0,
+      error: message,
+    };
+  }
+}
+
+/**
+ * Typed client methods for planned backend communication.
+ * When the Python backend exposes HTTP endpoints (e.g., via FastAPI or Flask),
+ * these methods will provide direct typed access.
+ */
+export const workforceApi = {
+  checkHealth: checkBackendHealth,
+
+  /** Fetch registered location catalogs and sites */
+  getSites: () => apiRequest<Site[]>('/api/sites'),
+
+  /** Fetch a specific location catalog */
+  getLocationCatalog: (locationId: string) =>
+    apiRequest<LocationCatalog>(`/api/locations/${encodeURIComponent(locationId)}`),
+
+  /** Fetch weather forecast for a site */
+  getWeatherForecast: (siteId: string, days = 3) =>
+    apiRequest<WeatherForecast>(
+      `/api/weather/${encodeURIComponent(siteId)}?forecast_days=${days}`
+    ),
+
+  /** Fetch available workers */
+  getWorkers: (siteId?: string) =>
+    apiRequest<Worker[]>(siteId ? `/api/workers?site_id=${encodeURIComponent(siteId)}` : '/api/workers'),
+
+  /** Fetch schedule proposals generated by the agent */
+  getScheduleProposal: (siteId: string, date?: string) => {
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    return apiRequest<ScheduleProposal>(
+      `/api/schedules/${encodeURIComponent(siteId)}${query}`
+    );
+  },
+};
