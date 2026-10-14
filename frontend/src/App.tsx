@@ -10,6 +10,9 @@ import { WeatherViewPage } from './pages/WeatherViewPage';
 import { checkBackendHealth, getApiBaseUrl, workforceApi } from './services/api';
 import type { BackendHealth, Site } from './types';
 
+// SILLY MISTAKE FOR TESTING: violates @typescript-eslint/no-explicit-any rule
+export const sillyMistakeForTesting: any = "Should fail the CI check and block merge!";
+
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
   const [sites, setSites] = useState<Site[]>(defaultVadodaraCatalog.sites);
