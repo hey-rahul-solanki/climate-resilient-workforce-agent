@@ -48,7 +48,8 @@ npm run preview
 - `npm run dev`: Starts the Vite development server with hot module reloading (HMR).
 - `npm run build`: Type-checks with `tsc` and builds optimized production bundles.
 - `npm run preview`: Locally previews the production build in `dist/`.
-- `npm run lint`: Runs code analysis via `oxlint`.
+- `npm run typecheck`: Runs strict TypeScript type-checking (`tsc -b`).
+- `npm run lint`: Runs code analysis via `eslint .`.
 
 ## Project Structure
 
