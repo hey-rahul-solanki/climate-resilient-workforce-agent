@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+dist/
+build/
+
+# Git and OS metadata
+.git/
+.gitignore
+.DS_Store
+Thumbs.db
+
+# Environment and local configs
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Linters & Editor
+.oxlintrc.json
+.vscode/
+.idea/
