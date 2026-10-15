@@ -13,7 +13,10 @@ from workforce_agent.locations import (
     load_location,
     load_site,
 )
+from workforce_agent.planning import BaselineExistsError, PlanningRunStore
 from workforce_agent.schemas import (
+    BaselineSnapshot,
+    PlanningRunRequest,
     ScheduleProposal,
     Site,
     WeatherForecast,
@@ -33,6 +36,11 @@ app = FastAPI(
     version="0.1.0",
     description="HTTP API for climate-resilient workforce scheduling, weather ingestion, and safety policies.",
 )
+
+
+def _planning_run_store() -> PlanningRunStore:
+    return PlanningRunStore(get_settings().planning_runs_db_path)
+
 
 # Enable CORS for frontend integration
 app.add_middleware(
@@ -117,6 +125,32 @@ def get_workers(site_id: str | None = None) -> list[Worker]:
 def get_schedule_proposals(site_id: str) -> list[ScheduleProposal]:
     """Retrieve active schedule proposals generated for a site."""
     return []
+
+
+@app.post("/api/planning-runs", response_model=BaselineSnapshot, status_code=201, tags=["Planning"])
+def create_planning_run(request: PlanningRunRequest) -> BaselineSnapshot:
+    """Capture and persist the original schedule and its baseline evaluation."""
+    try:
+        return _planning_run_store().create_baseline(
+            request.planning_run_id, request.dataset, request.assignments, request.unscheduled
+        )
+    except BaselineExistsError as err:
+        raise HTTPException(status_code=409, detail=str(err)) from err
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail=str(err)) from err
+
+
+@app.get(
+    "/api/planning-runs/{planning_run_id}/baseline",
+    response_model=BaselineSnapshot,
+    tags=["Planning"],
+)
+def get_planning_run_baseline(planning_run_id: str) -> BaselineSnapshot:
+    """Retrieve the immutable baseline captured for a planning run."""
+    snapshot = _planning_run_store().get_baseline(planning_run_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Baseline snapshot not found.")
+    return snapshot
 
 
 def run() -> None:

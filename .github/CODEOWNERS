@@ -1,0 +1,12 @@
+# CODEOWNERS
+# For details, see:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default code owner for the entire repository
+* @hey-rahul-solanki @shweta-kardak @riteshdhoke
+
+# Optional component-specific ownership:
+# /src/           @hey-rahul-solanki
+# /frontend/      @hey-rahul-solanki
+# /tests/         @hey-rahul-solanki
+# /.github/       @hey-rahul-solanki

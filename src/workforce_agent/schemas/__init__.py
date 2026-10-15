@@ -15,16 +15,20 @@ from workforce_agent.schemas.common import (
     TimeWindow,
 )
 from workforce_agent.schemas.entities import (
+    BaselineSnapshot,
     CoolingBreak,
     DailyWeather,
     Equipment,
     HeatThreshold,
     HourlyWeather,
     OperationalConstraint,
+    PlanningDataset,
+    PlanningRunRequest,
     SafetyPolicy,
     SafetyRule,
     ScheduleAssignment,
     ScheduleProposal,
+    ScheduleMetrics,
     Site,
     UnscheduledWorkOrder,
     WeatherDataQuality,
@@ -35,6 +39,7 @@ from workforce_agent.schemas.entities import (
 )
 
 __all__ = [
+    "BaselineSnapshot",
     "BreakRequirements",
     "Certification",
     "CoolingBreak",
@@ -47,6 +52,8 @@ __all__ = [
     "MissingWeatherAction",
     "OperatingHours",
     "OperationalConstraint",
+    "PlanningDataset",
+    "PlanningRunRequest",
     "OperationalStatus",
     "PolicyAction",
     "Priority",
@@ -57,6 +64,7 @@ __all__ = [
     "ScheduleAssignment",
     "ScheduleDecision",
     "ScheduleProposal",
+    "ScheduleMetrics",
     "Site",
     "SiteHazard",
     "TimeWindow",
