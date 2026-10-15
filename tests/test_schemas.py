@@ -199,7 +199,7 @@ def test_equipment_and_schedule_contracts() -> None:
     )
     proposal = ScheduleProposal(
         proposal_id="P-1",
-        planning_run_id="RUN-1",
+        planning_cycle_id="CYCLE-1",
         generated_at=datetime(2026, 5, 11, 18, 0, tzinfo=IST),
         horizon=WINDOW,
         policy_id=policy.policy_id,

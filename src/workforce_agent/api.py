@@ -13,16 +13,19 @@ from workforce_agent.locations import (
     load_location,
     load_site,
 )
-from workforce_agent.planning import BaselineExistsError, PlanningRunStore
+from workforce_agent.planning import BaselineExistsError, PlanningCycleStore
 from workforce_agent.schemas import (
     BaselineSnapshot,
-    PlanningRunRequest,
+    ClimateRiskAssessment,
+    PlanningCycleRequest,
+    SafetyAssessmentRequest,
     ScheduleProposal,
     Site,
     WeatherForecast,
     Worker,
 )
 from workforce_agent.weather.client import build_weather_client
+from workforce_agent.safety import assess_work_window
 from workforce_agent.weather.exceptions import (
     WeatherError,
     WeatherIncompleteError,
@@ -38,8 +41,8 @@ app = FastAPI(
 )
 
 
-def _planning_run_store() -> PlanningRunStore:
-    return PlanningRunStore(get_settings().planning_runs_db_path)
+def _planning_cycle_store() -> PlanningCycleStore:
+    return PlanningCycleStore(get_settings().planning_cycles_db_path)
 
 
 # Enable CORS for frontend integration
@@ -127,12 +130,29 @@ def get_schedule_proposals(site_id: str) -> list[ScheduleProposal]:
     return []
 
 
-@app.post("/api/planning-runs", response_model=BaselineSnapshot, status_code=201, tags=["Planning"])
-def create_planning_run(request: PlanningRunRequest) -> BaselineSnapshot:
+@app.post(
+    "/api/safety/assessments",
+    response_model=ClimateRiskAssessment,
+    tags=["Safety"],
+)
+def create_safety_assessment(request: SafetyAssessmentRequest) -> ClimateRiskAssessment:
+    """Evaluate a proposed task window against the supplied policy and forecast."""
+    if request.work_order.site_id != request.forecast.site_id:
+        raise HTTPException(status_code=422, detail="work order and forecast site IDs must match")
+    return assess_work_window(
+        request.work_order,
+        request.policy,
+        request.forecast,
+        window_start=request.proposed_start,
+    )
+
+
+@app.post("/api/planning-cycles", response_model=BaselineSnapshot, status_code=201, tags=["Planning"])
+def create_planning_cycle(request: PlanningCycleRequest) -> BaselineSnapshot:
     """Capture and persist the original schedule and its baseline evaluation."""
     try:
-        return _planning_run_store().create_baseline(
-            request.planning_run_id, request.dataset, request.assignments, request.unscheduled
+        return _planning_cycle_store().create_baseline(
+            request.planning_cycle_id, request.dataset, request.assignments, request.unscheduled
         )
     except BaselineExistsError as err:
         raise HTTPException(status_code=409, detail=str(err)) from err
@@ -141,13 +161,13 @@ def create_planning_run(request: PlanningRunRequest) -> BaselineSnapshot:
 
 
 @app.get(
-    "/api/planning-runs/{planning_run_id}/baseline",
+    "/api/planning-cycles/{planning_cycle_id}/baseline",
     response_model=BaselineSnapshot,
     tags=["Planning"],
 )
-def get_planning_run_baseline(planning_run_id: str) -> BaselineSnapshot:
-    """Retrieve the immutable baseline captured for a planning run."""
-    snapshot = _planning_run_store().get_baseline(planning_run_id)
+def get_planning_cycle_baseline(planning_cycle_id: str) -> BaselineSnapshot:
+    """Retrieve the immutable baseline captured for a planning cycle."""
+    snapshot = _planning_cycle_store().get_baseline(planning_cycle_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Baseline snapshot not found.")
     return snapshot

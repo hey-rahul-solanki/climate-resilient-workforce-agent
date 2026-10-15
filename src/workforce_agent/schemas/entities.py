@@ -351,6 +351,41 @@ class SafetyPolicy(StrictModel):
     missing_weather_action: MissingWeatherAction
 
 
+class ClimateRiskAssessment(StrictModel):
+    """Policy result for one proposed work window, with its source forecast."""
+
+    decision: ScheduleDecision
+    reasons: list[str] = Field(..., min_length=1)
+    requires_review: bool = False
+    cooling_break_minutes: int = Field(..., ge=0)
+    proposed_window: TimeWindow
+    forecast_id: str = Field(..., min_length=1)
+    forecast_issued_at: datetime
+
+    @field_validator("forecast_issued_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("forecast_issued_at must be timezone-aware")
+        return value
+
+
+class SafetyAssessmentRequest(StrictModel):
+    """Inputs to a single deterministic assessment call."""
+
+    work_order: WorkOrder
+    policy: SafetyPolicy
+    forecast: WeatherForecast
+    proposed_start: datetime
+
+    @field_validator("proposed_start")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("proposed_start must be timezone-aware")
+        return value
+
+
 class CoolingBreak(StrictModel):
     window: TimeWindow
     reason: str = Field(..., min_length=1)
@@ -375,7 +410,7 @@ class UnscheduledWorkOrder(StrictModel):
 
 class ScheduleProposal(StrictModel):
     proposal_id: str = Field(..., min_length=1)
-    planning_run_id: str = Field(..., min_length=1)
+    planning_cycle_id: str = Field(..., min_length=1)
     generated_at: datetime
     horizon: TimeWindow
     policy_id: str = Field(..., min_length=1)
@@ -393,7 +428,7 @@ class ScheduleProposal(StrictModel):
 
 
 class PlanningDataset(StrictModel):
-    """Inputs captured once and reused to evaluate every schedule in a run."""
+    """Inputs captured once and reused to evaluate schedules in a planning cycle."""
 
     work_orders: list[WorkOrder]
     workers: list[Worker]
@@ -416,10 +451,10 @@ class ScheduleMetrics(StrictModel):
 
 
 class BaselineSnapshot(StrictModel):
-    """Immutable source schedule and its evaluation for a planning run."""
+    """Immutable source schedule and its evaluation for a planning cycle."""
 
     snapshot_id: str = Field(..., min_length=1)
-    planning_run_id: str = Field(..., min_length=1)
+    planning_cycle_id: str = Field(..., min_length=1)
     captured_at: datetime
     dataset: PlanningDataset
     assignments: list[ScheduleAssignment]
@@ -434,8 +469,8 @@ class BaselineSnapshot(StrictModel):
         return value
 
 
-class PlanningRunRequest(StrictModel):
-    planning_run_id: str = Field(..., min_length=1)
+class PlanningCycleRequest(StrictModel):
+    planning_cycle_id: str = Field(..., min_length=1)
     dataset: PlanningDataset
     assignments: list[ScheduleAssignment]
     unscheduled: list[UnscheduledWorkOrder] = Field(default_factory=list)
