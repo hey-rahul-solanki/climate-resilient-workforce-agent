@@ -51,7 +51,7 @@ function bullet(slide, text, x, y, w, color = C.ink, dot = C.green, size = 22) {
   txt(s, 'The baseline\nschedule in action', 78, 138, 750, 180, 58, C.white, true);
   txt(s, 'Where the original plan is captured, how a supervisor uses it, and what an employee sees.', 82, 348, 655, 88, 25, '#E4EEE7');
   // Editable visual: one workday on a shared timeline
-  txt(s, 'PLANNING RUN', 883, 144, 270, 20, 14, C.lime, true);
+  txt(s, 'PLANNING CYCLE', 883, 144, 270, 20, 14, C.lime, true);
   txt(s, 'Vadodara Plant  •  13 Oct', 883, 178, 300, 32, 21, C.white, true);
   shape(s, 883, 246, 302, 2, '#80A393');
   for (const [x, label] of [[883, '06:00'], [1030, '10:00'], [1150, '14:00']]) txt(s, label, x, 255, 70, 20, 13, '#C9D8D0');
@@ -60,17 +60,17 @@ function bullet(slide, text, x, y, w, color = C.ink, dot = C.green, size = 22) {
   shape(s, 923, 369, 182, 46, '#9ABBA9', 8);
   txt(s, 'WO-105  •  inspection', 936, 375, 200, 32, 16, C.dark, true);
   txt(s, 'Snapshot saved before any climate-aware changes', 883, 474, 314, 58, 18, C.white, false);
-  note(s, 'This deck proposes where baseline capture belongs in the product. The backend now has a planning-run request, immutable SQLite baseline snapshot, and a shared versioned evaluator. The current React app does not yet have role-specific schedule pages; the screens that follow are product concepts.');
+  note(s, 'This deck proposes where baseline capture belongs in the product. The backend now has a planning-cycle request, immutable SQLite baseline snapshot, and a shared versioned evaluator. The current React app does not yet have role-specific schedule pages; the screens that follow are product concepts.');
 }
 
 // 2 — lifecycle
 {
-  const s = base('A planning run starts with the source schedule', 'Workflow', 2);
+  const s = base('A planning cycle starts with the source schedule', 'Workflow', 2);
   const xs = [82, 365, 648, 931];
   const titles = ['1  Select inputs', '2  Capture baseline', '3  Evaluate', '4  Plan for climate'];
   const desc = [
     'Work orders, workers,\nequipment and original\nassignments',
-    'Save the schedule and\ninput dataset under a\nunique run ID',
+    'Save the schedule and\ninput dataset under a\nunique cycle ID',
     'Apply shared metric\ndefinitions and store the\nmetric version',
     'Future schedule proposal\nuses the same dataset and\nevaluator',
   ];
@@ -102,7 +102,7 @@ function bullet(slide, text, x, y, w, color = C.ink, dot = C.green, size = 22) {
     txt(s, t, 94, 216 + i * 44, 160, 32, 16, i === 3 ? C.green : C.muted, i === 3);
   }
   txt(s, 'Safety & Scheduling', 300, 180, 500, 42, 29, C.ink, true);
-  txt(s, 'Site  Vadodara Plant     Date  13 Oct 2026     Run  RUN-2048', 300, 228, 820, 27, 17, C.muted);
+  txt(s, 'Site  Vadodara Plant     Date  13 Oct 2026     Cycle  CYCLE-2048', 300, 228, 820, 27, 17, C.muted);
   shape(s, 300, 274, 876, 71, '#EEF4EF', 8);
   txt(s, 'SOURCE SCHEDULE SAVED', 320, 285, 240, 20, 13, C.green, true);
   txt(s, '8 tasks  ·  12 workers  ·  4 equipment items', 320, 309, 510, 27, 18, C.ink, true);
@@ -123,7 +123,7 @@ function bullet(slide, text, x, y, w, color = C.ink, dot = C.green, size = 22) {
     shape(s, 316, y + 48, 836, 1, '#E9EEEA');
   });
   txt(s, 'Placement', 82, 575, 120, 22, 14, C.green, true);
-  txt(s, 'Add a Baseline section to the existing Safety & Scheduling workflow; make it available from the run detail.', 220, 568, 930, 34, 18, C.ink);
+  txt(s, 'Add a Baseline section to the existing Safety & Scheduling workflow; make it available from cycle details.', 220, 568, 930, 34, 18, C.ink);
   note(s, 'Proposed supervisor page, not a screenshot of an implemented screen. The current frontend has the Safety & Scheduling tab but no schedule table or role-based access. The values shown are illustrative examples, not product data.');
 }
 
@@ -164,7 +164,7 @@ function bullet(slide, text, x, y, w, color = C.ink, dot = C.green, size = 22) {
   txt(s, 'SUPERVISOR', 85, 177, 300, 26, 14, C.green, true);
   txt(s, 'EMPLOYEE', 85, 398, 300, 26, 14, C.blue, true);
   shape(s, 80, 216, 380, 132, C.white, 10, C.line);
-  txt(s, 'Start planning run', 108, 234, 325, 32, 23, C.ink, true);
+  txt(s, 'Start planning cycle', 108, 234, 325, 32, 23, C.ink, true);
   txt(s, 'Review original assignments and baseline metrics', 108, 278, 300, 52, 18, C.muted);
   shape(s, 80, 440, 380, 132, C.white, 10, C.line);
   txt(s, 'My schedule', 108, 457, 325, 32, 23, C.ink, true);
@@ -173,14 +173,14 @@ function bullet(slide, text, x, y, w, color = C.ink, dot = C.green, size = 22) {
   shape(s, 460, 280, 103, 2, C.green); txt(s, '›', 520, 258, 30, 44, 34, C.green, true, 'center');
   shape(s, 460, 504, 103, 2, C.blue); txt(s, '›', 520, 482, 30, 44, 34, C.blue, true, 'center');
   shape(s, 580, 234, 600, 295, '#E8EEE9', 14);
-  txt(s, 'PLANNING RUN RECORD', 613, 261, 500, 22, 14, C.green, true);
+  txt(s, 'PLANNING CYCLE RECORD', 613, 261, 500, 22, 14, C.green, true);
   txt(s, 'Original input dataset', 613, 302, 490, 33, 22, C.ink, true);
   txt(s, 'Work orders  •  workers  •  equipment', 613, 338, 490, 28, 17, C.muted);
   shape(s, 613, 383, 534, 1, '#CDD9D1');
   txt(s, 'Immutable baseline snapshot', 613, 401, 490, 33, 22, C.ink, true);
   txt(s, 'Assignments  •  windows  •  allocations  •  metrics v1', 613, 440, 510, 30, 16, C.muted);
   txt(s, 'The same dataset and evaluator can be reused when evaluating a future proposal.', 613, 480, 510, 40, 16, C.green, true);
-  note(s, 'The supervisor owns planning and baseline review. The employee page consumes the active schedule. Both sit over the same planning run record. The current implementation persists baseline data in SQLite and exposes create/retrieve API endpoints; the role pages are proposed UI placement.');
+  note(s, 'The supervisor owns planning and baseline review. The employee page consumes the active schedule. Both sit over the same planning cycle record. The current implementation persists baseline data in SQLite and exposes create/retrieve API endpoints; the role pages are proposed UI placement.');
 }
 
 // 6 — scope and status
@@ -190,7 +190,7 @@ function bullet(slide, text, x, y, w, color = C.ink, dot = C.green, size = 22) {
   txt(s, 'IN THE BASELINE CAPTURE', x1, 180, 470, 26, 14, C.green, true);
   bullet(s, 'Original task assignments and time windows', x1, 226, 500);
   bullet(s, 'Worker and equipment allocations', x1, 292, 500);
-  bullet(s, 'Input dataset stored with the run', x1, 358, 500);
+  bullet(s, 'Input dataset stored with the cycle', x1, 358, 500);
   bullet(s, 'Versioned metrics and immutable snapshot', x1, 424, 500);
   shape(s, 620, 185, 1, 390, C.line);
   txt(s, 'NEXT PRODUCT WORK', x2, 180, 470, 26, 14, C.amber, true);
@@ -208,5 +208,5 @@ for (const [index, slide] of ppt.slides.items.entries()) {
   await fs.writeFile(`${OUT}/slide-${String(index + 1).padStart(2, '0')}.png`, new Uint8Array(await blob.arrayBuffer()));
 }
 const deck = await PresentationFile.exportPptx(ppt);
-await deck.save(`${OUT}/baseline-schedule-action-draft.pptx`);
+await deck.save(`${OUT}/baseline-schedule-cycle-final-draft.pptx`);
 console.log(`created ${ppt.slides.items.length} slides`);

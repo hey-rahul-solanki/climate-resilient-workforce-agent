@@ -1,4 +1,4 @@
-"""Planning-run baseline capture and immutable persistence."""
+"""Planning-cycle baseline capture and immutable persistence."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ METRIC_DEFINITION_VERSION = "1"
 
 
 class BaselineExistsError(Exception):
-    """Raised when a planning run already has its write-once baseline."""
+    """Raised when a planning cycle already has its write-once baseline."""
 
 
 def evaluate_schedule(
@@ -58,7 +58,7 @@ def evaluate_schedule(
     )
 
 
-class PlanningRunStore:
+class PlanningCycleStore:
     """SQLite store whose trigger rules prevent baseline snapshot mutation."""
 
     def __init__(self, path: Path):
@@ -70,7 +70,7 @@ class PlanningRunStore:
         connection.execute("PRAGMA recursive_triggers = ON")
         connection.execute(
             "CREATE TABLE IF NOT EXISTS baseline_snapshots ("
-            "planning_run_id TEXT PRIMARY KEY, snapshot_json TEXT NOT NULL)"
+            "planning_cycle_id TEXT PRIMARY KEY, snapshot_json TEXT NOT NULL)"
         )
         connection.execute(
             "CREATE TRIGGER IF NOT EXISTS baseline_snapshots_no_update "
@@ -86,14 +86,14 @@ class PlanningRunStore:
 
     def create_baseline(
         self,
-        planning_run_id: str,
+        planning_cycle_id: str,
         dataset: PlanningDataset,
         assignments: list[ScheduleAssignment],
         unscheduled: list[UnscheduledWorkOrder],
     ) -> BaselineSnapshot:
         snapshot = BaselineSnapshot(
             snapshot_id=str(uuid4()),
-            planning_run_id=planning_run_id,
+            planning_cycle_id=planning_cycle_id,
             captured_at=datetime.now(UTC),
             dataset=dataset,
             assignments=assignments,
@@ -103,19 +103,19 @@ class PlanningRunStore:
         try:
             with self._connect() as connection:
                 connection.execute(
-                    "INSERT INTO baseline_snapshots (planning_run_id, snapshot_json) VALUES (?, ?)",
-                    (planning_run_id, snapshot.model_dump_json()),
+                    "INSERT INTO baseline_snapshots (planning_cycle_id, snapshot_json) VALUES (?, ?)",
+                    (planning_cycle_id, snapshot.model_dump_json()),
                 )
         except sqlite3.IntegrityError as error:
             raise BaselineExistsError(
-                f"baseline already exists for planning run '{planning_run_id}'"
+                f"baseline already exists for planning cycle '{planning_cycle_id}'"
             ) from error
         return snapshot
 
-    def get_baseline(self, planning_run_id: str) -> BaselineSnapshot | None:
+    def get_baseline(self, planning_cycle_id: str) -> BaselineSnapshot | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT snapshot_json FROM baseline_snapshots WHERE planning_run_id = ?",
-                (planning_run_id,),
+                "SELECT snapshot_json FROM baseline_snapshots WHERE planning_cycle_id = ?",
+                (planning_cycle_id,),
             ).fetchone()
         return BaselineSnapshot.model_validate_json(row[0]) if row else None
