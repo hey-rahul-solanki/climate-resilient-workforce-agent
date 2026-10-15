@@ -10,6 +10,7 @@ import { WeatherViewPage } from './pages/WeatherViewPage';
 import { checkBackendHealth, getApiBaseUrl, workforceApi } from './services/api';
 import type { BackendHealth, Site } from './types';
 
+
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
   const [sites, setSites] = useState<Site[]>(defaultVadodaraCatalog.sites);
