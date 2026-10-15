@@ -1,0 +1,35 @@
+# Git and IDE
+.git/
+.github/
+.gitignore
+.DS_Store
+.idea/
+.vscode/
+
+# Python artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Frontend (handled by frontend/.dockerignore and frontend Dockerfile)
+frontend/
+node_modules/
+
+# Logs and scratch
+*.log
+out.txt
+scratch/

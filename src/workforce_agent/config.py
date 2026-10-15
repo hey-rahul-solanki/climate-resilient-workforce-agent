@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     weather_stale_after_minutes: int = Field(default=180, gt=0)
     weather_timeout_seconds: float = Field(default=20.0, gt=0)
     fixture_path: Path | None = None
+    planning_runs_db_path: Path = Path("data/planning_runs.sqlite3")
     default_location_id: str = "vadodara-gujarat"
 
 

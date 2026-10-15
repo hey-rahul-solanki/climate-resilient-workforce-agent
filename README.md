@@ -10,15 +10,17 @@ A companion modern React + Vite frontend is located in `frontend/` to monitor si
 
 ## Python Backend Setup & Testing
 
+> 📖 **Dedicated Backend Documentation:** Detailed backend architecture, endpoint tables, CLI guides, and environment configurations are in [src/README.md](src/README.md).
+
 ### 1. Environment Setup
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,api]"
 ```
 
-*(Alternatively, if using `uv`: `uv run --extra dev pytest`)*
+*(Alternatively, if using `uv`: `uv pip install -e ".[dev,api]"` or `uv run --extra dev --extra api pytest`)*
 
 ### 2. Data Contracts
 
@@ -180,3 +182,66 @@ The project uses a clean, decoupled architecture:
    - `GET /api/weather/{site_id}?forecast_days=3`: Returns normalized hourly forecast.
    - `GET /api/workers`: Returns worker skills and availability.
    - `POST /api/schedules/proposals`: Triggers agent schedule optimization.
+
+---
+
+## Docker & Docker Compose Deployment
+
+The repository includes production-ready multi-stage Dockerfiles and Compose configurations for running the backend and frontend together.
+
+### 1. Quick Start with Docker Compose
+
+Build and launch all services with a single command:
+
+```bash
+docker compose up --build
+```
+
+Once running:
+- **Frontend Web UI**: [http://localhost:5173](http://localhost:5173)
+- **FastAPI Backend Base**: [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Backend Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
+
+To run in the background (detached mode):
+
+```bash
+docker compose up -d
+```
+
+To stop and remove containers:
+
+```bash
+docker compose down
+```
+
+### 2. Live Reloading for Local Development
+
+To run with live source mounting and hot reloading enabled for both frontend and backend:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+### 3. Running with PostgreSQL Database (Optional)
+
+To start the optional PostgreSQL 16 container (matching `DATABASE_SCHEMA.md`):
+
+```bash
+docker compose --profile db up --build
+```
+
+### 4. Building Individual Docker Images
+
+**Backend Image**:
+```bash
+docker build -t workforce-backend -f Dockerfile .
+docker run -p 8000:8000 workforce-backend
+```
+
+**Frontend Image**:
+```bash
+docker build -t workforce-frontend -f frontend/Dockerfile ./frontend
+docker run -p 5173:80 workforce-frontend
+```
+

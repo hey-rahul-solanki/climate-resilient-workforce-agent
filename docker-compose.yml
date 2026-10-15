@@ -1,0 +1,87 @@
+services:
+  # ============================================================================
+  # Python FastAPI Backend Service
+  # ============================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: workforce-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - WORKFORCE_WEATHER_SOURCE=${WORKFORCE_WEATHER_SOURCE:-open-meteo}
+      - WORKFORCE_DEFAULT_LOCATION_ID=${WORKFORCE_DEFAULT_LOCATION_ID:-vadodara-gujarat}
+      - WORKFORCE_WEATHER_STALE_AFTER_MINUTES=${WORKFORCE_WEATHER_STALE_AFTER_MINUTES:-180}
+      - WORKFORCE_WEATHER_TIMEOUT_SECONDS=${WORKFORCE_WEATHER_TIMEOUT_SECONDS:-20}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - workforce-net
+
+  # ============================================================================
+  # React + Vite Frontend Service (Served via Nginx)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: workforce-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:80/"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - workforce-net
+
+  # ============================================================================
+  # PostgreSQL Database (Optional / Milestone 2 schema persistence)
+  # Activated with: docker compose --profile db up
+  # ============================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: workforce-db
+    restart: unless-stopped
+    profiles:
+      - db
+      - full
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-workforce_db}
+      POSTGRES_USER: ${POSTGRES_USER:-workforce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-workforce_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - workforce-net
+
+networks:
+  workforce-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

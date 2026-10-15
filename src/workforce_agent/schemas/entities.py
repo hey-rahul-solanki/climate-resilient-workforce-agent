@@ -390,3 +390,52 @@ class ScheduleProposal(StrictModel):
         if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
             raise ValueError("generated_at must be timezone-aware")
         return value
+
+
+class PlanningDataset(StrictModel):
+    """Inputs captured once and reused to evaluate every schedule in a run."""
+
+    work_orders: list[WorkOrder]
+    workers: list[Worker]
+    equipment: list[Equipment]
+
+
+class ScheduleMetrics(StrictModel):
+    """Versioned, schedule-independent metrics shared by baseline and proposals."""
+
+    definition_version: str = Field(..., min_length=1)
+    input_work_order_count: int = Field(..., ge=0)
+    input_worker_count: int = Field(..., ge=0)
+    input_equipment_count: int = Field(..., ge=0)
+    assignment_count: int = Field(..., ge=0)
+    scheduled_work_order_count: int = Field(..., ge=0)
+    worker_allocation_count: int = Field(..., ge=0)
+    equipment_allocation_count: int = Field(..., ge=0)
+    scheduled_minutes: int = Field(..., ge=0)
+    unscheduled_work_order_count: int = Field(..., ge=0)
+
+
+class BaselineSnapshot(StrictModel):
+    """Immutable source schedule and its evaluation for a planning run."""
+
+    snapshot_id: str = Field(..., min_length=1)
+    planning_run_id: str = Field(..., min_length=1)
+    captured_at: datetime
+    dataset: PlanningDataset
+    assignments: list[ScheduleAssignment]
+    unscheduled: list[UnscheduledWorkOrder]
+    metrics: ScheduleMetrics
+
+    @field_validator("captured_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+            raise ValueError("captured_at must be timezone-aware")
+        return value
+
+
+class PlanningRunRequest(StrictModel):
+    planning_run_id: str = Field(..., min_length=1)
+    dataset: PlanningDataset
+    assignments: list[ScheduleAssignment]
+    unscheduled: list[UnscheduledWorkOrder] = Field(default_factory=list)
