@@ -123,4 +123,8 @@ This is a decision-support product. Deterministic policy validation—not the LL
 7. Deterministic end-to-end demo, safety tests, accessibility, and integration documentation.
 
 ## 10. Design reference
-Use the supplied screenshot as the visual reference: a wide employee-by-time day calendar on the left and a climate-agent panel on the right. The screenshot is a layout reference, not evidence that sample values or integrations are live.
+Use the corrected design reference below: a wide employee-by-time day calendar on the left and a climate-agent panel on the right. Event cards use the same 6 AM–6 PM time scale as the timeline, the high-heat interval is 12:00 PM–4:00 PM, and every outdoor activity with any overlap is flagged. The count and event data are illustrative fixture values, not a live forecast; the MCP/calendar integration is not connected in the design mockup.
+
+![Climate-resilient workforce calendar day view](assets/climate_resilient_workforce_calendar.svg)
+
+*Design reference only. The illustrated cooling policy and weather values are illustrative and must be confirmed against the configured site policy and forecast before operational use.*
