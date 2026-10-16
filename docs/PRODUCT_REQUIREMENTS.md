@@ -37,6 +37,9 @@ This is a decision-support product. Deterministic policy validation—not the LL
 - Only day view is supported in MVP; no week/month toggle.
 - Rows represent employees and show name plus operational role/team.
 - The time axis uses the site's timezone; activity cards use actual start/end times.
+- Each activity bar must begin and end exactly at the timeline positions for its displayed start/end time; bar width must be proportional to duration (for example, 8:00 AM–12:00 PM spans four hourly intervals).
+- Render start/end labels consistently with the bar geometry; do not stretch short activities to fit labels. Use compact labels, wrapping, or tooltips instead.
+- The warning band must start and end at the exact warning timestamps. Suggested replacement times must use the same site timezone and visibly map to the same time scale.
 - Activity cards display title, time, location, and indoor/outdoor/unknown classification.
 - Outdoor activities overlapping warning intervals show a visible icon, text label, and warning state; do not rely on color alone.
 - Show the climate warning interval as a background band and include a legend.
@@ -123,7 +126,7 @@ This is a decision-support product. Deterministic policy validation—not the LL
 7. Deterministic end-to-end demo, safety tests, accessibility, and integration documentation.
 
 ## 10. Design reference
-Use the corrected design reference below: a wide employee-by-time day calendar on the left and a climate-agent panel on the right. Event cards use the same 6 AM–6 PM time scale as the timeline, the high-heat interval is 12:00 PM–4:00 PM, and every outdoor activity with any overlap is flagged. The count and event data are illustrative fixture values, not a live forecast; the MCP/calendar integration is not connected in the design mockup.
+Use the corrected design reference below: a wide employee-by-time day calendar on the left and a climate-agent panel on the right. Activity bars must align to the 6 AM–6 PM hourly grid according to their displayed start/end times; duration is represented proportionally, and labels must not distort bar geometry. The high-heat interval is 12:00 PM–4:00 PM, and every outdoor activity overlapping any part of that interval is flagged. The count and event data are illustrative fixture values, not a live forecast; the MCP/calendar integration is not connected in the design mockup.
 
 ![Climate-resilient workforce calendar day view](assets/climate_resilient_workforce_calendar.svg)
 
