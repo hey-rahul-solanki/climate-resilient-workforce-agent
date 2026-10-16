@@ -1,133 +1,126 @@
-# Product Requirements: Climate-Resilient Workforce Planning
+# Product Requirements: Climate-Resilient Workforce Calendar
 
 **Status:** MVP product brief  
-**Product:** Climate-Resilient Workforce Planning  
-**Repository:** `hey-rahul-solanki/climate-resilient-workforce-agent`  
-**Primary experience:** Day-view workforce schedule with a climate-agent side panel  
-**Audience:** Operations managers, EHS leads, and industrial field-maintenance planners
+**Primary screen:** Single-day employee calendar with climate agent side panel  
+**Audience:** Site supervisors, operations managers, and EHS leads  
+**Architecture principle:** Reusable climate-agent capabilities exposed through MCP and a service/API contract
 
 ## 1. Product vision
-Help industrial operations teams see which planned outdoor tasks overlap with hazardous weather, understand why they are flagged, and review safer schedule proposals without losing operational context or bypassing safety policy.
+Help supervisors see every outdoor activity that overlaps a climate warning, understand why it is affected, and ask an agent to suggest schedule changes. The climate agent should also be consumable by third-party scheduling/calendar tools through an MCP server, or by custom services that use the same structured action suggestions.
 
-The product is a decision-support system. It must make risks and trade-offs understandable; it must not claim that work is safe solely because an AI agent says so.
+This is a decision-support product. Deterministic policy validation—not the LLM—is authoritative for whether a proposed schedule is allowed.
 
-## 2. MVP problem
-Managers currently need to cross-reference worker schedules, outdoor task locations, weather forecasts, resource constraints, and site safety rules. This is error-prone and slow, especially when several tasks overlap a high-heat period.
+## 2. MVP boundaries
+- Build **one screen only**: a Google Calendar-style **day view**, with one timeline row per employee and the climate-agent panel on the right.
+- Do not build week/month views, multi-screen analytics, optimization, historical insights, or workforce performance scoring.
+- Show the selected site/date, employees, activity times, activity location/type, climate warnings, and suggestions.
+- Flag **all outdoor activities whose time intervals overlap a climate warning**, including partial overlaps. Indoor activities are not flagged solely because a warning is active.
+- Unknown activity type/location or stale/missing weather is marked needs-review; never silently assume safe.
+- The agent can suggest and prepare rescheduling proposals. A supervisor must explicitly approve rescheduling before a calendar event's time changes.
+- A configurable background check detects affected events without requiring the UI to be open.
+- For affected outdoor events, a configured calendar integration may append an informational climate disclaimer to event notes. This is separate from rescheduling and must be idempotent.
+- Expose reusable capabilities through an MCP server and a service/API contract for non-MCP integrations.
 
-## 3. MVP goals
-- Show a single site's daily schedule by worker and time.
-- Visually distinguish outdoor tasks, indoor tasks, climate-risk periods, and flagged assignments.
-- Summarize the number of affected tasks and the relevant forecast window.
-- Present a short ranked list of actionable schedule suggestions with a reason and suggested time.
-- Let a manager inspect a proposal, compare current and proposed times, and approve, reject, or request revision.
-- Surface required cooling/rest periods and explain the policy basis.
-- Support conversational questions such as “Who is affected?” and “Suggest safer times.”
-- Clearly show whether data is simulated, fixture-based, or live; display forecast freshness.
-- Keep all schedule changes as proposals until an authorized manager approves them.
+## 3. Primary supervisor journey
+1. Open the site's selected day and see all employee schedules.
+2. Identify every outdoor activity overlapping a climate warning.
+3. Read the banner and inspect each flagged activity's reason, warning window, forecast freshness, and policy context.
+4. Review the agent's precomputed suggestions or chat with the agent to provide constraints (for example, move inspections before noon).
+5. Inspect the proposed schedule changes and any tasks with no feasible safe alternative.
+6. Approve, reject, or request revision.
+7. After approval, the calendar integration applies only the approved changes and reports the outcome.
+8. Independently, the configured background check may append/update the climate disclaimer on affected outdoor event notes; it never changes event time.
 
-## 4. Non-goals for the MVP
-- Global optimal schedule search, objective-function scoring, or OR-Tools-based optimization.
-- Autonomous calendar writes or agent-controlled safety overrides.
-- Multi-site portfolio analytics and workforce performance scoring.
-- Historical insights, advanced notification delivery, and MCP integration (future phase).
-- Treating a blank/missing forecast as safe.
+## 4. Main screen requirements
 
-## 5. Primary user and key journey
-**Primary user:** Site operations manager responsible for daily field-maintenance work.
+### A. Single-day employee calendar
+- Only day view is supported in MVP; no week/month toggle.
+- Rows represent employees and show name plus operational role/team.
+- The time axis uses the site's timezone; activity cards use actual start/end times.
+- Activity cards display title, time, location, and indoor/outdoor/unknown classification.
+- Outdoor activities overlapping warning intervals show a visible icon, text label, and warning state; do not rely on color alone.
+- Show the climate warning interval as a background band and include a legend.
+- Every matching outdoor activity is flagged, not just the top suggestions.
+- Indoor activities remain unflagged based on weather alone.
+- Include loading, empty, error, and responsive states.
 
-1. Open the day view for a site and date.
-2. See the schedule, forecast risk window, affected outdoor tasks, and data freshness.
-3. Select a flagged task or suggestion.
-4. Inspect the reason, source forecast, policy rule, resource constraints, and proposed alternative window.
-5. Review the change list, including tasks that cannot be safely rescheduled.
-6. Approve, reject, or request a revision.
-7. If approved, apply the change only through the authorized calendar integration; show a clear success/failure result and audit trail.
+### B. Climate warning summary
+- Show severity, warning start/end, relevant weather measure, forecast updated-at/source, and computed affected activity count.
+- Counts are derived from the schedule and warnings, never hardcoded.
+- Stale/incomplete/unavailable weather is explicit and does not imply safe conditions.
 
-## 6. Main page requirements
+### C. Climate-agent panel
+- Show affected-event count and useful suggested schedule updates near the top.
+- Each suggestion includes activity/employee, current time, proposed time if feasible, rationale, relevant warning/policy, and validation status.
+- Supervisor can chat, provide constraints, ask who is affected, and request rescheduling.
+- The agent may ask clarification when intent or constraints are insufficient.
+- No feasible alternative must be represented explicitly; never invent a time.
+- Agent status and MCP connection status must be truthful.
 
-### A. Schedule header
-- Show selected site, date, worker count, and navigation to previous/next day and Today.
-- Changing site/date refreshes schedule and weather data.
-- Show a clear loading, empty, and error state.
+### D. Supervisor approval
+- Review current versus proposed times, affected employees/resources, climate and policy rationale, and validation results.
+- Support approve, reject, and request revision.
+- Revalidate policy, availability, and source calendar event version before applying.
+- Pending/rejected proposals never change event times.
+- Record actor, decision, timestamp, and integration outcome.
 
-### B. Day timeline
-- Rows represent workers; each row shows worker name and role/team.
-- Horizontal axis shows local site time and scheduled task duration.
-- Task cards show task name, time range, and indoor/outdoor classification.
-- Outdoor tasks overlapping a risk window receive a high-contrast warning state and explicit risk label.
-- Indoor tasks are visually distinct and are not flagged solely because they occur during the heat window.
-- Show the climate-risk interval as a background band with a legend.
-- Avoid relying on color alone: pair colors with icons/text and provide accessible contrast.
-- Support overlapping/conflicting tasks without hiding either task; on narrow screens, provide a usable alternative layout.
+### E. Background monitoring and event notes
+- A configurable background job checks upcoming scheduled activities against the latest available forecast and configured policy.
+- It flags all outdoor activities overlapping climate warnings; indoor activities receive no weather-only action.
+- When enabled and authorized, append a concise disclaimer to affected outdoor event notes with warning window, relevant forecast measure, source/update time, and a reminder to follow site policy.
+- Preserve existing notes, use a clearly delimited product-owned section, and make repeated runs idempotent.
+- Note annotation must not change event time, attendees, or other unrelated content.
+- Failed calendar writes must be reported accurately; a note is informational, not a declaration that work is safe.
 
-### C. Climate summary banner
-- Show severity, start/end time, relevant measure (for example, feels-like temperature), and count of affected tasks.
-- Explain that the banner is forecast-based and display the forecast issue/update time.
-- If data is stale, incomplete, or unavailable, show that status explicitly and do not assert safe conditions.
+## 5. Agent/MCP and integration requirements
+- MCP server exposes documented tools with typed input/output schemas.
+- Initial tool capabilities: list affected activities, get climate suggestions, create a rescheduling proposal, and invoke the configured event-note annotation flow.
+- MCP tools and the UI call the same core application services and deterministic validators.
+- Provide a reusable service/API contract so custom-built scheduling systems can consume structured suggestions without implementing an MCP client.
+- Separate read, proposal, annotation, and rescheduling permissions/actions.
+- Proposal-generation tools must not directly reschedule calendar events.
+- Do not claim a provider or MCP connection exists unless health/status confirms it.
 
-### D. Climate agent panel
-- Show connection/data status honestly (for example, “Demo data”, “Weather connected”, “Agent unavailable”); do not imply MCP is connected unless it is.
-- Show total flagged events and top suggestions.
-- Each suggestion includes affected worker/task, reason, suggested time, and a Review action.
-- “View more” opens the full flagged-task list.
-- Quick prompts include “Who is affected?” and “Suggest safer times.”
-- Answers cite the task, forecast window, and applicable policy in plain language.
-- Agent output is advisory; it cannot bypass deterministic policy validation.
+## 6. Functional requirements
+- FR-01: Return selected-day employee schedules with stable activity IDs, site timezone, location, and indoor/outdoor/unknown classification.
+- FR-02: Normalize forecast data and retain freshness/completeness/source metadata.
+- FR-03: Deterministically flag every outdoor activity overlapping one or more warning intervals.
+- FR-04: Explain each flag with the relevant warning interval and configured policy reason.
+- FR-05: Generate structured feasible rescheduling suggestions and explicit no-feasible-slot results.
+- FR-06: Accept supervisor constraints through chat and validate them before creating proposals.
+- FR-07: Require explicit supervisor approval and revalidation before changing calendar event times.
+- FR-08: Run background climate checks independently of the page being open.
+- FR-09: Append/update informational notes for affected outdoor events when enabled, without duplicating content.
+- FR-10: Expose shared capabilities through MCP and a reusable service/API contract.
+- FR-11: Provide deterministic fixtures for repeatable demo and tests.
 
-### E. Cooling periods and policy
-- Show applicable work/rest rules and the source/configuration of the policy.
-- Mark whether a rule is informational or requires review/approval.
-- Proposed schedules must respect mandatory breaks and prohibited work windows.
-- Do not invent medical thresholds or present demo values as official policy.
+## 7. Safety, privacy, and reliability
+- Deterministic policy validation is authoritative; the LLM cannot override it.
+- Unknown/stale weather, unknown location/type, or unknown policy yields unknown/needs-review—not safe.
+- No schedule changes without explicit supervisor approval.
+- Event-note disclaimers are informational, preserve existing notes, and never replace official safety procedures.
+- Do not invent medical thresholds or present demo policy as official workplace guidance.
+- Minimize personal data and show only operationally necessary employee information.
+- Use site-local timestamps consistently; test timezone and interval boundaries.
+- Background jobs and note annotations must be retry-safe and idempotent.
 
-### F. Proposal review and approval
-- Show current versus proposed time, affected workers/resources, climate rationale, policy rationale, and validation results.
-- Offer Approve, Reject, and Request revision actions with confirmation where appropriate.
-- Revalidate policy, worker/resource availability, and source-event version at approval time.
-- Never apply pending/rejected proposals. Show audit status and any integration error.
+## 8. MVP success criteria
+- A reviewer can identify the warning window and affected outdoor activities within 10 seconds.
+- Every outdoor activity overlapping a warning is flagged, including partial overlap; indoor tasks are not weather-flagged.
+- Every suggestion has an explanation and validation state.
+- Unsafe proposals are blocked and pending/rejected proposals cannot change calendar events.
+- Repeated background runs do not duplicate disclaimers.
+- MCP and service/API clients receive the same structured results as the UI.
+- Demo works without live credentials and clearly labels fixture/simulated integrations.
 
-## 7. Functional requirements
-- FR-01: Retrieve workers, tasks, site configuration, weather, and policy through typed API contracts.
-- FR-02: Evaluate climate risk deterministically from configured policy and normalized forecast data.
-- FR-03: Identify impacted tasks by outdoor classification and overlap between task window and risk window.
-- FR-04: Generate simple feasible time suggestions respecting duration, skills, shift, dependencies, resources, and breaks.
-- FR-05: Preserve an immutable baseline snapshot for each planning run.
-- FR-06: Return structured proposals and explicit reasons when no feasible safe slot exists.
-- FR-07: Keep proposal approval separate from proposal generation and calendar writes.
-- FR-08: Make simulated versus live integrations unmistakable in the UI.
-- FR-09: Record proposal decisions and integration outcomes for auditability.
-- FR-10: Provide deterministic fixtures so the main demo works without live API dependencies.
+## 9. Delivery sequence
+1. Day-view schedule contract and single-day calendar layout.
+2. Deterministic warning-overlap detection and banner/flag UI.
+3. Shared suggestion service and agent side panel/chat.
+4. MCP server and non-MCP service/API contract.
+5. Supervisor review and approval-gated rescheduling.
+6. Background monitoring and idempotent calendar-note annotation.
+7. Deterministic end-to-end demo, safety tests, accessibility, and integration documentation.
 
-## 8. Safety, privacy, and reliability
-- Deterministic policy validation is authoritative; the LLM is never the safety enforcement layer.
-- Unknown or stale weather must result in “unknown / needs review”, not “safe”.
-- The system must not schedule work in a prohibited window or violate mandatory cooling/rest rules.
-- Do not infer health status or use the system for worker discipline.
-- Minimize personal data; show only operationally necessary worker information.
-- Clearly separate recommendations from applied schedule changes.
-- All times use the site's timezone; handle daylight-saving transitions where applicable.
-
-## 9. MVP success criteria
-- A reviewer can identify affected tasks and the risk window within 10 seconds of opening the day view.
-- Every flagged task has a visible, understandable reason.
-- Every proposed change shows current time, proposed time, and validation outcome.
-- Tests prove unsafe proposals are blocked and unapproved changes never write to a calendar.
-- Demo works repeatably with fixed fixture data and explicitly labels simulated integrations.
-- No critical schedule content is hidden behind color alone.
-
-## 10. MVP scope and sequencing
-1. **Data and baseline:** schemas, synthetic fixture, immutable baseline.
-2. **Risk and feasibility:** weather normalization, deterministic climate policy, resource and cooling-break validation.
-3. **Planning:** simple safe-window suggestions; no optimizer.
-4. **Review UI:** timeline, risk banner, agent panel, flagged list, proposal comparison and decision controls.
-5. **Integration:** calendar read and approval-gated writes; clearly simulated when credentials are absent.
-6. **Hardening:** safety tests, accessibility, demo scenarios and limitations.
-
-## 11. Design reference
-The supplied product screenshot is the visual reference: a wide day timeline on the left and a climate-agent panel on the right, with a site/date header, heat-risk banner, worker rows, event cards, top suggestions, cooling periods, and conversational prompts. Treat the screenshot as a direction for hierarchy and interaction, not as proof that the displayed values or integrations are real.
-
-## 12. Open product decisions
-- Confirm the initial screen uses synthetic/demo data until all API contracts are wired.
-- Confirm the authoritative site policy and source for heat thresholds before presenting values as operational guidance.
-- Confirm whether calendar integration is a required hackathon demo path or whether a simulated approval/write flow is sufficient.
-- Confirm the minimum supported viewport and accessibility target.
+## 10. Design reference
+Use the supplied screenshot as the visual reference: a wide employee-by-time day calendar on the left and a climate-agent panel on the right. The screenshot is a layout reference, not evidence that sample values or integrations are live.
