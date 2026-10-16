@@ -136,7 +136,7 @@ The architecture below captures the climate-aware scheduling system and its inte
 - **Google Calendar API** is the current read/write calendar integration: background analysis reads schedules, and approved updates are written only after supervisor approval.
 - **External consumers** connect through MCP. The scheduling-tools section lists Microsoft Outlook and other enterprise schedulers with MCP support; Google Calendar is not duplicated there because it is shown as the backend's calendar integration. Custom services can consume suggested actions through MCP or REST and integrate with their own enterprise scheduling systems.
 
-![Climate-aware scheduling system architecture](assets/climate_aware_scheduling_architecture.png)
+![Climate-aware scheduling system architecture](assets/climate_aware_scheduling_architecture.svg)
 
 *Architecture reference. Calendar updates are approval-gated; background monitoring performs read-only schedule analysis and updates warnings/suggestions, not event times.*
 
