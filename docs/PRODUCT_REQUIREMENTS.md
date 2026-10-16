@@ -125,7 +125,22 @@ This is a decision-support product. Deterministic policy validation—not the LL
 6. Background monitoring and idempotent calendar-note annotation.
 7. Deterministic end-to-end demo, safety tests, accessibility, and integration documentation.
 
-## 10. Design reference
+## 10. System architecture reference
+
+The architecture below captures the climate-aware scheduling system and its integration boundaries:
+
+- The **Supervisor Web App** provides a single-day calendar, climate-agent panel, and approval workflow.
+- The **GCP backend (Cloud Run)** hosts the Climate Workforce Agent and MCP server. The agent uses Vertex AI, session/memory support, and model safety controls; deterministic policy validation remains authoritative.
+- MCP tools provide affected-activity lookup, schedule suggestions, proposal validation, approval-gated schedule updates, and climate-warning retrieval.
+- The **background monitoring agent** runs independently on a schedule, reads calendar events and operational data, checks climate warnings against outdoor activities, and updates the web app's warning/suggestion data. It does not change event times.
+- **Google Calendar API** is the current read/write calendar integration: background analysis reads schedules, and approved updates are written only after supervisor approval.
+- **External consumers** connect through MCP. The scheduling-tools section lists Microsoft Outlook and other enterprise schedulers with MCP support; Google Calendar is not duplicated there because it is shown as the backend's calendar integration. Custom services can consume suggested actions through MCP or REST and integrate with their own enterprise scheduling systems.
+
+![Climate-aware scheduling system architecture](assets/climate_aware_scheduling_architecture.png)
+
+*Architecture reference. Calendar updates are approval-gated; background monitoring performs read-only schedule analysis and updates warnings/suggestions, not event times.*
+
+## 11. Calendar design reference
 Use the corrected design reference below: a wide employee-by-time day calendar on the left and a climate-agent panel on the right. Activity bars must align to the 6 AM–6 PM hourly grid according to their displayed start/end times; duration is represented proportionally, and labels must not distort bar geometry. The high-heat interval is 12:00 PM–4:00 PM, and every outdoor activity overlapping any part of that interval is flagged. The count and event data are illustrative fixture values, not a live forecast; the MCP/calendar integration is not connected in the design mockup.
 
 ![Climate-resilient workforce calendar day view](assets/climate_resilient_workforce_calendar.svg)
