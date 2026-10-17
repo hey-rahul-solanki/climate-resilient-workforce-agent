@@ -26,7 +26,9 @@ COPY src/ ./src/
 COPY tests/fixtures/ ./tests/fixtures/
 
 # Install the Python package with API dependencies (FastAPI + Uvicorn)
-RUN pip install --no-cache-dir ".[api]" \
+ARG WORKFORCE_PYTHON_EXTRAS=api
+RUN pip install --no-cache-dir ".[${WORKFORCE_PYTHON_EXTRAS}]" \
+    && mkdir -p /app/data \
     && chown -R workforce:workforce /app
 
 # Run as non-root user

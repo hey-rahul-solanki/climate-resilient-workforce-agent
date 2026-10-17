@@ -15,6 +15,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+vertex = ["google-genai>=2.31,<3"]
+mcp = ["mcp>=1.28,<2"]
 dev = [
     "pytest>=8.0",
     "respx>=0.21",
@@ -26,6 +28,7 @@ api = [
 
 [project.scripts]
 workforce-weather = "workforce_agent.weather.cli:main"
+workforce-agent-mcp = "workforce_agent.mcp_server:run"
 workforce-api = "workforce_agent.api:run"
 
 [tool.setuptools.packages.find]
