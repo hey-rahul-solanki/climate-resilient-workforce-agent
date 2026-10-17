@@ -19,3 +19,6 @@ frontend/dist/
 frontend/.env.local
 frontend/.env.*.local
 
+
+# Local approval audit database
+data/approvals.sqlite3*

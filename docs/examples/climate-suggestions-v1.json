@@ -1,0 +1,257 @@
+{
+  "api_version": "1.0",
+  "mode": "fixture",
+  "session_id": "example-session",
+  "expires_at": "2026-10-17T19:38:03.855668Z",
+  "site_id": "VAD-PLANT-01",
+  "timezone": "Asia/Kolkata",
+  "date": "2026-10-17",
+  "affected_activities": [
+    {
+      "activity_id": "event-1",
+      "title": "Panel maintenance",
+      "employee_id": "0",
+      "current_start": "2026-10-17T11:30:00+05:30",
+      "current_end": "2026-10-17T13:30:00+05:30",
+      "status": "affected",
+      "reason": "Heat warning: Demo heat policy \u2014 requires site confirmation v1",
+      "warnings": [
+        {
+          "start": "2026-10-17T12:00:00+05:30",
+          "end": "2026-10-17T16:00:00+05:30",
+          "id": "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30",
+          "title": "Heat warning",
+          "severity": "High",
+          "measure": "apparent_temperature_c: 41 \u00b0C (peak)",
+          "policy": "Demo heat policy \u2014 requires site confirmation v1",
+          "peak": 41.0,
+          "site_id": "VAD-PLANT-01",
+          "work_locations": [],
+          "source": "Deterministic demo forecast",
+          "updated_at": "2026-10-17T05:00:00+05:30",
+          "affected_activity_count": 3
+        }
+      ],
+      "warning_matches": [
+        {
+          "warning_id": "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30",
+          "overlap": {
+            "start": "2026-10-17T12:00:00+05:30",
+            "end": "2026-10-17T13:30:00+05:30"
+          },
+          "severity": "High",
+          "rationale": "Outdoor activity at Substation overlaps Heat warning; Demo heat policy \u2014 requires site confirmation v1.",
+          "policy": "Demo heat policy \u2014 requires site confirmation v1"
+        }
+      ]
+    },
+    {
+      "activity_id": "event-2",
+      "title": "Site inspection",
+      "employee_id": "1",
+      "current_start": "2026-10-17T12:30:00+05:30",
+      "current_end": "2026-10-17T15:00:00+05:30",
+      "status": "affected",
+      "reason": "Heat warning: Demo heat policy \u2014 requires site confirmation v1",
+      "warnings": [
+        {
+          "start": "2026-10-17T12:00:00+05:30",
+          "end": "2026-10-17T16:00:00+05:30",
+          "id": "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30",
+          "title": "Heat warning",
+          "severity": "High",
+          "measure": "apparent_temperature_c: 41 \u00b0C (peak)",
+          "policy": "Demo heat policy \u2014 requires site confirmation v1",
+          "peak": 41.0,
+          "site_id": "VAD-PLANT-01",
+          "work_locations": [],
+          "source": "Deterministic demo forecast",
+          "updated_at": "2026-10-17T05:00:00+05:30",
+          "affected_activity_count": 3
+        }
+      ],
+      "warning_matches": [
+        {
+          "warning_id": "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30",
+          "overlap": {
+            "start": "2026-10-17T12:30:00+05:30",
+            "end": "2026-10-17T15:00:00+05:30"
+          },
+          "severity": "High",
+          "rationale": "Outdoor activity at East perimeter overlaps Heat warning; Demo heat policy \u2014 requires site confirmation v1.",
+          "policy": "Demo heat policy \u2014 requires site confirmation v1"
+        }
+      ]
+    },
+    {
+      "activity_id": "event-5",
+      "title": "Pump inspection",
+      "employee_id": "2",
+      "current_start": "2026-10-17T15:30:00+05:30",
+      "current_end": "2026-10-17T17:00:00+05:30",
+      "status": "affected",
+      "reason": "Heat warning: Demo heat policy \u2014 requires site confirmation v1",
+      "warnings": [
+        {
+          "start": "2026-10-17T12:00:00+05:30",
+          "end": "2026-10-17T16:00:00+05:30",
+          "id": "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30",
+          "title": "Heat warning",
+          "severity": "High",
+          "measure": "apparent_temperature_c: 41 \u00b0C (peak)",
+          "policy": "Demo heat policy \u2014 requires site confirmation v1",
+          "peak": 41.0,
+          "site_id": "VAD-PLANT-01",
+          "work_locations": [],
+          "source": "Deterministic demo forecast",
+          "updated_at": "2026-10-17T05:00:00+05:30",
+          "affected_activity_count": 3
+        }
+      ],
+      "warning_matches": [
+        {
+          "warning_id": "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30",
+          "overlap": {
+            "start": "2026-10-17T15:30:00+05:30",
+            "end": "2026-10-17T16:00:00+05:30"
+          },
+          "severity": "High",
+          "rationale": "Outdoor activity at Pump station overlaps Heat warning; Demo heat policy \u2014 requires site confirmation v1.",
+          "policy": "Demo heat policy \u2014 requires site confirmation v1"
+        }
+      ]
+    },
+    {
+      "activity_id": "event-6",
+      "title": "Asset survey",
+      "employee_id": "3",
+      "current_start": "2026-10-17T10:00:00+05:30",
+      "current_end": "2026-10-17T12:00:00+05:30",
+      "status": "needs-review",
+      "reason": "Indoor/outdoor classification is unknown; Work location is unknown; needs review.",
+      "warnings": [],
+      "warning_matches": []
+    }
+  ],
+  "actions": [
+    {
+      "proposal_id": "example-proposal-1",
+      "activity_id": "event-1",
+      "suggested_action": "reschedule",
+      "current_window": {
+        "start": "2026-10-17T11:30:00+05:30",
+        "end": "2026-10-17T13:30:00+05:30"
+      },
+      "proposed_window": {
+        "start": "2026-10-17T06:00:00+05:30",
+        "end": "2026-10-17T08:00:00+05:30"
+      },
+      "rationale": "Validated against demo forecast/policy, duration, employee/location conflicts and requested window; approval required.",
+      "warning_ids": [
+        "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30"
+      ],
+      "warning_references": [
+        {
+          "warning_id": "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30",
+          "overlap": {
+            "start": "2026-10-17T12:00:00+05:30",
+            "end": "2026-10-17T13:30:00+05:30"
+          },
+          "severity": "High",
+          "rationale": "Outdoor activity at Substation overlaps Heat warning; Demo heat policy \u2014 requires site confirmation v1.",
+          "policy": "Demo heat policy \u2014 requires site confirmation v1"
+        }
+      ],
+      "policy_references": [
+        "demo-heat v1"
+      ],
+      "validation_status": "demo-validated",
+      "validation_checks": {
+        "policy_and_availability": true
+      },
+      "infeasibility_reasons": [],
+      "requires_supervisor_approval": true,
+      "approval_state": "pending"
+    },
+    {
+      "proposal_id": "example-proposal-2",
+      "activity_id": "event-2",
+      "suggested_action": "reschedule",
+      "current_window": {
+        "start": "2026-10-17T12:30:00+05:30",
+        "end": "2026-10-17T15:00:00+05:30"
+      },
+      "proposed_window": {
+        "start": "2026-10-17T06:00:00+05:30",
+        "end": "2026-10-17T08:30:00+05:30"
+      },
+      "rationale": "Validated against demo forecast/policy, duration, employee/location conflicts and requested window; approval required.",
+      "warning_ids": [
+        "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30"
+      ],
+      "warning_references": [
+        {
+          "warning_id": "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30",
+          "overlap": {
+            "start": "2026-10-17T12:30:00+05:30",
+            "end": "2026-10-17T15:00:00+05:30"
+          },
+          "severity": "High",
+          "rationale": "Outdoor activity at East perimeter overlaps Heat warning; Demo heat policy \u2014 requires site confirmation v1.",
+          "policy": "Demo heat policy \u2014 requires site confirmation v1"
+        }
+      ],
+      "policy_references": [
+        "demo-heat v1"
+      ],
+      "validation_status": "demo-validated",
+      "validation_checks": {
+        "policy_and_availability": true
+      },
+      "infeasibility_reasons": [],
+      "requires_supervisor_approval": true,
+      "approval_state": "pending"
+    },
+    {
+      "proposal_id": "example-proposal-3",
+      "activity_id": "event-5",
+      "suggested_action": "reschedule",
+      "current_window": {
+        "start": "2026-10-17T15:30:00+05:30",
+        "end": "2026-10-17T17:00:00+05:30"
+      },
+      "proposed_window": {
+        "start": "2026-10-17T06:00:00+05:30",
+        "end": "2026-10-17T07:30:00+05:30"
+      },
+      "rationale": "Validated against demo forecast/policy, duration, employee/location conflicts and requested window; approval required.",
+      "warning_ids": [
+        "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30"
+      ],
+      "warning_references": [
+        {
+          "warning_id": "demo-heat:apparent_temperature_c:2026-10-17T12:00:00+05:30",
+          "overlap": {
+            "start": "2026-10-17T15:30:00+05:30",
+            "end": "2026-10-17T16:00:00+05:30"
+          },
+          "severity": "High",
+          "rationale": "Outdoor activity at Pump station overlaps Heat warning; Demo heat policy \u2014 requires site confirmation v1.",
+          "policy": "Demo heat policy \u2014 requires site confirmation v1"
+        }
+      ],
+      "policy_references": [
+        "demo-heat v1"
+      ],
+      "validation_status": "demo-validated",
+      "validation_checks": {
+        "policy_and_availability": true
+      },
+      "infeasibility_reasons": [],
+      "requires_supervisor_approval": true,
+      "approval_state": "pending"
+    }
+  ],
+  "message": "Prepared proposals only. No calendar times changed.",
+  "clarification_required": false
+}

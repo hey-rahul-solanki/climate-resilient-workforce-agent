@@ -6,6 +6,8 @@ The first milestone is the planning data contract and weather ingestion. Locatio
 
 A companion modern React + Vite frontend is located in `frontend/` to monitor sites, inspect weather ingestion parameters, and visualize schedule safety policies.
 
+Custom scheduling integrations can use the [versioned climate suggestion API](docs/CLIMATE_SERVICE_API_V1.md) without an MCP client.
+
 ---
 
 ## Python Backend Setup & Testing
