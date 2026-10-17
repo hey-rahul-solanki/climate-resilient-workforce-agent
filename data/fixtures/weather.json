@@ -1,0 +1,156 @@
+{
+  "locations": {
+    "VAD-PLANT-01": {
+      "site_id": "VAD-PLANT-01",
+      "name": "Vadodara Process Plant",
+      "city": "Vadodara",
+      "state": "Gujarat",
+      "country": "India",
+      "latitude": 22.3072,
+      "longitude": 73.1812,
+      "timezone": "Asia/Kolkata",
+      "display_name": "Vadodara Process Plant, Vadodara, Gujarat, India"
+    },
+    "MUM-SITE-01": {
+      "site_id": "MUM-SITE-01",
+      "name": "Mumbai Industrial Site",
+      "city": "Mumbai",
+      "state": "Maharashtra",
+      "country": "India",
+      "latitude": 19.0760,
+      "longitude": 72.8777,
+      "timezone": "Asia/Kolkata",
+      "display_name": "Mumbai Industrial Site, Mumbai, Maharashtra, India"
+    }
+  },
+  "weather": {
+    "VAD-PLANT-01": {
+      "location": "Vadodara, Gujarat, India",
+      "latitude": 22.3072,
+      "longitude": 73.1812,
+      "timezone": "Asia/Kolkata",
+      "hourly": [
+        {
+          "time": "2024-01-15T06:00:00Z",
+          "temperature_c": 28.0,
+          "precipitation_percent": 10.0,
+          "wind_speed_kmh": 8.0,
+          "visibility_km": 10.0,
+          "humidity_percent": 60.0
+        },
+        {
+          "time": "2024-01-15T09:00:00Z",
+          "temperature_c": 32.0,
+          "precipitation_percent": 15.0,
+          "wind_speed_kmh": 10.0,
+          "visibility_km": 9.0,
+          "humidity_percent": 65.0
+        },
+        {
+          "time": "2024-01-15T12:00:00Z",
+          "temperature_c": 38.0,
+          "precipitation_percent": 20.0,
+          "wind_speed_kmh": 12.0,
+          "visibility_km": 8.0,
+          "humidity_percent": 70.0
+        },
+        {
+          "time": "2024-01-15T14:00:00Z",
+          "temperature_c": 42.0,
+          "precipitation_percent": 5.0,
+          "wind_speed_kmh": 10.0,
+          "visibility_km": 10.0,
+          "humidity_percent": 60.0
+        },
+        {
+          "time": "2024-01-15T16:00:00Z",
+          "temperature_c": 38.0,
+          "precipitation_percent": 15.0,
+          "wind_speed_kmh": 12.0,
+          "visibility_km": 9.0,
+          "humidity_percent": 65.0
+        },
+        {
+          "time": "2024-01-15T18:00:00Z",
+          "temperature_c": 32.0,
+          "precipitation_percent": 10.0,
+          "wind_speed_kmh": 8.0,
+          "visibility_km": 10.0,
+          "humidity_percent": 55.0
+        },
+        {
+          "time": "2024-01-15T20:00:00Z",
+          "temperature_c": 28.0,
+          "precipitation_percent": 5.0,
+          "wind_speed_kmh": 6.0,
+          "visibility_km": 10.0,
+          "humidity_percent": 50.0
+        }
+      ]
+    },
+    "MUM-SITE-01": {
+      "location": "Mumbai, Maharashtra, India",
+      "latitude": 19.0760,
+      "longitude": 72.8777,
+      "timezone": "Asia/Kolkata",
+      "hourly": [
+        {
+          "time": "2024-01-15T06:00:00Z",
+          "temperature_c": 26.0,
+          "precipitation_percent": 15.0,
+          "wind_speed_kmh": 12.0,
+          "visibility_km": 8.0,
+          "humidity_percent": 70.0
+        },
+        {
+          "time": "2024-01-15T09:00:00Z",
+          "temperature_c": 30.0,
+          "precipitation_percent": 25.0,
+          "wind_speed_kmh": 15.0,
+          "visibility_km": 7.0,
+          "humidity_percent": 75.0
+        },
+        {
+          "time": "2024-01-15T12:00:00Z",
+          "temperature_c": 35.0,
+          "precipitation_percent": 35.0,
+          "wind_speed_kmh": 18.0,
+          "visibility_km": 6.0,
+          "humidity_percent": 80.0
+        },
+        {
+          "time": "2024-01-15T14:00:00Z",
+          "temperature_c": 38.0,
+          "precipitation_percent": 45.0,
+          "wind_speed_kmh": 15.0,
+          "visibility_km": 5.0,
+          "humidity_percent": 75.0
+        },
+        {
+          "time": "2024-01-15T16:00:00Z",
+          "temperature_c": 35.0,
+          "precipitation_percent": 35.0,
+          "wind_speed_kmh": 18.0,
+          "visibility_km": 6.0,
+          "humidity_percent": 80.0
+        },
+        {
+          "time": "2024-01-15T18:00:00Z",
+          "temperature_c": 30.0,
+          "precipitation_percent": 20.0,
+          "wind_speed_kmh": 10.0,
+          "visibility_km": 8.0,
+          "humidity_percent": 65.0
+        },
+        {
+          "time": "2024-01-15T20:00:00Z",
+          "temperature_c": 27.0,
+          "precipitation_percent": 10.0,
+          "wind_speed_kmh": 8.0,
+          "visibility_km": 10.0,
+          "humidity_percent": 60.0
+        }
+      ]
+    }
+  }
+}

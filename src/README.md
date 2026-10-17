@@ -4,6 +4,17 @@ Core Python service for AI-powered workforce scheduling, real-time meteorologica
 
 ---
 
+## 🎯 Hackathon AI Agent
+
+**New AI Components for Hackathon:**
+- `src/workforce_agent/ai/weather_safety.py` - Weather safety assessment
+- `src/workforce_agent/ai/schedule_checker.py` - Free slot checking
+- `src/workforce_agent/ai/location_service.py` - OpenStreetMap integration
+
+**See [HACKATHON_AI_AGENT.md](../HACKATHON_AI_AGENT.md) for implementation details.**
+
+---
+
 ## Quick Start
 
 ### 1. Environment Setup

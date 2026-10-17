@@ -8,6 +8,20 @@ A companion modern React + Vite frontend is located in `frontend/` to monitor si
 
 ---
 
+## 🎯 Hackathon Solution
+
+**Quick Start for Hackathon:** See [HACKATHON_README.md](HACKATHON_README.md) for the simplified solution focused on weather-based scheduling with OpenStreetMap integration.
+
+**Hackathon Documentation:**
+- [HACKATHON_README.md](HACKATHON_README.md) - Quick start guide
+- [HACKATHON_SOLUTION.md](HACKATHON_SOLUTION.md) - Solution overview and strategy
+- [HACKATHON_AI_AGENT.md](HACKATHON_AI_AGENT.md) - AI agent implementation details
+- [HACKATHON_UI_DESIGN.md](HACKATHON_UI_DESIGN.md) - Simplified UI design specifications
+- [DATABASE_SCHEMA_HACKATHON_UPDATES.md](DATABASE_SCHEMA_HACKATHON_UPDATES.md) - Database schema changes
+- [HACKATHON_IMPLEMENTATION_GUIDE.md](HACKATHON_IMPLEMENTATION_GUIDE.md) - Step-by-step implementation guide
+
+---
+
 ## Python Backend Setup & Testing
 
 > 📖 **Dedicated Backend Documentation:** Detailed backend architecture, endpoint tables, CLI guides, and environment configurations are in [src/README.md](src/README.md).
