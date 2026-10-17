@@ -83,10 +83,11 @@ Once running:
 | `GET` | `/api/weather/{site_id}` | Fetch normalized hourly weather forecast with WBGT & heat index | `site_id` (e.g. `VAD-PLANT-01`), `forecast_days` (1–14, default 3) |
 | `GET` | `/api/workers` | List available technician profiles and certifications | `site_id` (optional filter) |
 | `GET` | `/api/schedules/{site_id}` | Retrieve generated schedule proposals and assignments | `site_id` |
-| `POST` | `/api/planning-runs` | Persist a planning run's original schedule and baseline metrics | Dataset, assignments, unscheduled work orders |
-| `GET` | `/api/planning-runs/{planning_run_id}/baseline` | Retrieve the immutable baseline snapshot | `planning_run_id` |
+| `POST` | `/api/safety/assessments` | Assess a proposed task window against a supplied climate policy and forecast | Work order, policy, forecast, proposed start |
+| `POST` | `/api/planning-cycles` | Persist a planning cycle's original schedule and baseline metrics | Dataset, assignments, unscheduled work orders |
+| `GET` | `/api/planning-cycles/{planning_cycle_id}/baseline` | Retrieve the immutable baseline snapshot | `planning_cycle_id` |
 
-Planning run baselines are stored in SQLite at `WORKFORCE_PLANNING_RUNS_DB_PATH` (default: `data/planning_runs.sqlite3`). The snapshot captures the exact input dataset and original assignments. `evaluate_schedule()` in `workforce_agent.planning` is the shared, versioned metric implementation for baseline and later proposal evaluation; its version is stored with each snapshot. A planning run ID can be created only once.
+Planning cycle baselines are stored in SQLite at `WORKFORCE_PLANNING_CYCLES_DB_PATH` (default: `data/planning_cycles.sqlite3`). The snapshot captures the exact input dataset and original assignments. `evaluate_schedule()` in `workforce_agent.planning` is the shared, versioned metric implementation for baseline and later proposal evaluation; its version is stored with each snapshot. A planning cycle ID can be created only once.
 
 ### Sample Requests
 
