@@ -1,10 +1,12 @@
 """Exercise SDK discovery/calls through the authenticated HTTP adapter."""
 import asyncio
 import json
+from datetime import date
 from types import SimpleNamespace
 
 import httpx
 import pytest
+from pydantic import AnyUrl
 
 pytest.importorskip('mcp')
 from fastapi.testclient import TestClient
@@ -12,9 +14,27 @@ from workforce_agent import mcp_server
 from workforce_agent.api import app
 
 
+def consumer_context(day):
+    from workforce_agent.day_schedule import get_day_schedule
+    from workforce_agent.schemas.calendar import DayContextSubmission
+    calendar=get_day_schedule('VAD-PLANT-01',day).model_dump(mode='json')
+    source_fields={'id','employee_id','title','start','end','site_id','location','kind',
+                   'exposure_type','scheduled_rest','mandatory_rest_intervals'}
+    calendar['activities']=[{key:value for key,value in activity.items() if key in source_fields}
+                            for activity in calendar['activities']]
+    context=DayContextSubmission.model_validate({key:calendar[key] for key in
+        ('date','site','window','employees','activities')})
+    from workforce_agent.calendar import demo_inputs
+    forecast,policy=demo_inputs(day)
+    return context,forecast,policy
+
+
 def test_mcp_schema_and_api_parity(monkeypatch):
+    from workforce_agent import agent_api
+    from workforce_agent.agent import AgentService
     monkeypatch.setenv('WORKFORCE_AGENT_CREDENTIALS', json.dumps({'mcp-test':dict(subject='mcp-supervisor', permissions=['read','propose'], sites=['VAD-PLANT-01'])}))
     monkeypatch.setenv('WORKFORCE_AGENT_TOKEN','mcp-test')
+    monkeypatch.setattr(agent_api,'service',AgentService())
     client = TestClient(app)
     def handle(request):
         response = client.request(request.method, request.url.raw_path.decode(), content=request.content, headers=request.headers)
@@ -24,11 +44,21 @@ def test_mcp_schema_and_api_parity(monkeypatch):
     async def exercise():
         tools = await mcp_server.mcp.list_tools()
         names = {t.name for t in tools}
-        assert names == {'create_supervisor_session','list_affected_activities','get_climate_suggestions','create_rescheduling_proposal','supervisor_chat','configure_warning_notes','annotate_warning_notes','propose_reschedule','annotate_affected_activity'}
+        assert names == {'create_supervisor_session','analyze_consumer_schedule','list_affected_activities','get_climate_suggestions','create_rescheduling_proposal','supervisor_chat','configure_warning_notes','annotate_warning_notes','propose_reschedule','annotate_affected_activity'}
         proposal = next(t for t in tools if t.name == 'create_rescheduling_proposal')
         assert 'constraints' in proposal.inputSchema['properties']
         assert proposal.outputSchema
+        submitted_tool = next(t for t in tools if t.name == 'analyze_consumer_schedule')
+        assert set(submitted_tool.inputSchema['properties']) == {'context','policy'}
         session = mcp_server.create_supervisor_session(__import__('datetime').date(2026,10,17))
+        context,forecast,policy=consumer_context(__import__('datetime').date(2026,10,17))
+        direct = mcp_server.analyze_consumer_schedule(context,policy)
+        assert direct.site.id == 'VAD-PLANT-01' and direct.mode == 'consumer-submitted'
+        assert direct.weather.source
+        assert any(activity.warning_matches for activity in direct.activities)
+        rejected = client.post('/api/agent/analysis/consumer-schedule', headers={'Authorization':'Bearer mcp-test'},
+            json={'context':context.model_dump(mode='json'),'forecast':forecast.model_dump(mode='json'),'policy':policy.model_dump(mode='json')})
+        assert rejected.status_code == 422
         evidence = mcp_server.list_affected_activities(session.session_id)
         api = client.get(f'/api/agent/sessions/{session.session_id}', headers={'Authorization':'Bearer mcp-test'}).json()
         assert evidence.model_dump(mode='json') == api
@@ -94,18 +124,28 @@ def test_permissions_targeted_annotation_and_infeasible_proposals(bridge,monkeyp
 
 
 @pytest.mark.parametrize('condition',['stale','missing'])
-def test_mcp_unknown_forecast_fails_closed(bridge,monkeypatch,condition):
-    from workforce_agent.agent import Constraints
+def test_mcp_backend_weather_fails_closed(bridge,monkeypatch,condition):
     from workforce_agent.calendar import demo_inputs
     from datetime import date
-    service,sid=bridge
+    service,_=bridge
     forecast,policy=demo_inputs(date(2026,10,17))
-    forecast.quality.is_stale=True
-    monkeypatch.setattr(service,'_inputs',lambda _: (None,None) if condition=='missing' else (forecast,policy))
-    result=mcp_server.propose_reschedule(sid,Constraints(latest='12:00'))
-    assert not result.suggestions or all(s.start is None and s.validation=='needs-review' for s in result.suggestions)
-    mcp_server.configure_warning_notes(sid,True)
-    assert mcp_server.annotate_affected_activity(sid,'event-1').monitoring.last_run.events[0].result=='skipped'
+    if condition=='stale':
+        forecast.quality.is_stale=True
+        service.weather_client=SimpleNamespace(get_forecast=lambda site,window: forecast)
+    else:
+        from workforce_agent.weather.exceptions import WeatherUnavailableError
+        def unavailable(site,window): raise WeatherUnavailableError('offline')
+        service.weather_client=SimpleNamespace(get_forecast=unavailable)
+    context,_,policy=consumer_context(date(2026,10,17))
+    result_context=mcp_server.analyze_consumer_schedule(context,policy)
+    assert result_context.weather.status=='needs-review'
+    assert all(activity.status=='needs-review' for activity in result_context.activities)
+    unauthorized=context.model_copy(update={
+        'site':context.site.model_copy(update={'id':'UNKNOWN'}),
+        'activities':[activity.model_copy(update={'site_id':None}) for activity in context.activities],
+    })
+    with pytest.raises(mcp_server.MCPServiceError,match='forbidden'):
+        mcp_server.analyze_consumer_schedule(unauthorized,policy)
 
 
 def test_sdk_malformed_input_and_injection_cannot_write(bridge):
@@ -149,13 +189,28 @@ def test_real_stdio_protocol_discovery_and_error_envelopes():
             async with ClientSession(read,write) as session:
                 await session.initialize()
                 tools=(await session.list_tools()).tools
-                required={'list_affected_activities','get_climate_suggestions','propose_reschedule','annotate_affected_activity'}
+                required={'analyze_consumer_schedule','list_affected_activities','get_climate_suggestions','propose_reschedule','annotate_affected_activity'}
                 assert required.issubset(t.name for t in tools)
                 for tool in tools:
                     assert tool.inputSchema and tool.outputSchema
+                resources=(await session.list_resources()).resources
+                uris={str(resource.uri) for resource in resources}
+                assert {'climate://schemas/day-calendar-response','climate://schemas/climate-evidence','climate://schemas/planning-responses','climate://schemas/usage'} <= uris
+                schema=await session.read_resource(AnyUrl('climate://schemas/day-calendar-response'))
+                assert 'DayCalendarResponse' in str(schema) and 'activities' in str(schema)
+                usage=await session.read_resource(AnyUrl('climate://schemas/usage'))
+                assert '[start, end)' in str(usage) and 'read permission' in str(usage)
+                planning=await session.read_resource(AnyUrl('climate://schemas/planning-responses'))
+                assert 'Suggestion' in str(planning) and 'AnnotationReply' in str(planning)
                 malformed=await session.call_tool('propose_reschedule',{'session_id':'../other','constraints':{'latest':'99:00'}})
                 assert malformed.isError
                 unauthenticated=await session.call_tool('list_affected_activities',{'session_id':'a'*43})
                 assert unauthenticated.isError
                 assert 'authentication-required' in str(unauthenticated.content)
+                submitted,forecast,policy=consumer_context(date(2026,10,17))
+                denied=await session.call_tool('analyze_consumer_schedule',{
+                    'context':submitted.model_dump(mode='json'),
+                    'policy':policy.model_dump(mode='json'),
+                })
+                assert denied.isError and 'authentication-required' in str(denied.content)
     asyncio.run(exercise())

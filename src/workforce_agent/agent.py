@@ -16,6 +16,9 @@ from workforce_agent.reasoning import ReasoningService, ModelMeasurement
 from workforce_agent.schemas.calendar import WarningMatch, DayWarning
 from workforce_agent.schemas.common import TimeWindow
 from workforce_agent.suggestion_service import validate_model_candidates
+from workforce_agent.day_schedule import analyze_submitted_day_context
+from workforce_agent.schemas import SafetyPolicy, WeatherForecast
+from workforce_agent.schemas.calendar import DayCalendarResponse, DayContextSubmission
 
 AGENT_ID = 'climate-workforce/deterministic-v1'
 
@@ -131,8 +134,9 @@ class AgentError(Exception):
 
 
 class AgentService:
-    def __init__(self, *, clock=None, ttl_seconds=1800, approval_store=None, reasoning: ReasoningService | None = None):
+    def __init__(self, *, clock=None, ttl_seconds=1800, approval_store=None, reasoning: ReasoningService | None = None, weather_client=None):
         self.reasoning = reasoning
+        self.weather_client = weather_client
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.ttl_seconds = ttl_seconds
         self.approvals = approval_store or ApprovalStore()
@@ -142,6 +146,26 @@ class AgentService:
     def authorize(self, principal, site, permission):
         if site not in principal.sites or permission not in principal.permissions:
             raise AgentError(403, 'Not authorized for this site/action')
+
+    def analyze_consumer_schedule(self, principal: Principal, context: DayContextSubmission,
+                                  policy: SafetyPolicy) -> DayCalendarResponse:
+        """Analyze consumer-owned schedule and policy against backend-owned weather."""
+        self.authorize(principal, context.site.id, 'read')
+        try:
+            if self.weather_client is None:
+                # Keep isolated service instances deterministic for tests and demos.
+                forecast = demo_inputs(context.date)[0]
+            else:
+                from workforce_agent.locations import load_site
+                from workforce_agent.weather.exceptions import WeatherError
+                try:
+                    site = load_site(context.site.id)
+                    forecast = self.weather_client.get_forecast(site, context.window)
+                except (KeyError, WeatherError):
+                    forecast = None
+            return analyze_submitted_day_context(context, forecast, policy, now=self.clock())
+        except ValueError as error:
+            raise AgentError(422, str(error)) from error
 
     def create(self, principal: Principal, day: date, site='VAD-PLANT-01') -> Reply:
         self.authorize(principal, site, 'read')

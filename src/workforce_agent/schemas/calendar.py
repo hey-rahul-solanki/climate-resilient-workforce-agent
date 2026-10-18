@@ -12,6 +12,8 @@ from workforce_agent.policy_windows import RestInterval
 class CalendarActivity(BaseModel):
     model_config = ConfigDict(extra='allow')
     id: str = Field(min_length=1)
+    employee_id: str | None = Field(default=None, min_length=1)
+    title: str | None = Field(default=None, min_length=1)
     start: datetime
     end: datetime
     site_id: str | None = None
@@ -124,6 +126,42 @@ class DayIntegrations(BaseModel):
     calendar: str
 
 
+class DayContextSubmission(BaseModel):
+    """Consumer-owned schedule input, composed from the canonical day models."""
+    model_config = ConfigDict(extra='forbid')
+    date: CalendarDate
+    site: DaySite
+    window: TimeWindow
+    employees: list[DayEmployee]
+    activities: list[CalendarActivity]
+
+    @model_validator(mode='after')
+    def validate_submitted_schedule(self):
+        timezone = ZoneInfo(self.site.timezone)
+        day_start = datetime.combine(self.date, time.min, tzinfo=timezone)
+        day_end = datetime.combine(self.date + timedelta(days=1), time.min, tzinfo=timezone)
+        if not day_start <= self.window.start < self.window.end <= day_end:
+            raise ValueError('Display window must be inside the selected site-local day')
+        employee_ids = {employee.id for employee in self.employees}
+        activity_ids = set()
+        derived_fields = {'status', 'reason', 'warning_ids', 'warning_matches', 'policy_context', 'policy_blocks'}
+        for activity in self.activities:
+            if activity.id in activity_ids:
+                raise ValueError('Activity IDs must be unique within the submitted day')
+            activity_ids.add(activity.id)
+            if not activity.employee_id or not activity.title:
+                raise ValueError('Each submitted activity requires employee_id and title')
+            if activity.employee_id not in employee_ids:
+                raise ValueError('Activity references an unknown employee')
+            if activity.site_id is not None and activity.site_id != self.site.id:
+                raise ValueError('Activity site differs from the submitted site')
+            if not activity.start < day_end or not activity.end > day_start:
+                raise ValueError('Activity must overlap the selected site-local day')
+            if derived_fields.intersection(activity.model_extra or {}):
+                raise ValueError('Submit source activities without derived climate status or warning fields')
+        return self
+
+
 class DayCalendarResponse(BaseModel):
     """Selected local day. All event intervals are [start, end)."""
     date: CalendarDate
@@ -135,7 +173,7 @@ class DayCalendarResponse(BaseModel):
     suggestions: list[DaySuggestion] = Field(default_factory=list)
     weather: DayWeather
     integrations: DayIntegrations
-    mode: Literal['fixture'] = 'fixture'
+    mode: Literal['fixture', 'consumer-submitted'] = 'fixture'
 
     @model_validator(mode='after')
     def validate_day_and_references(self):

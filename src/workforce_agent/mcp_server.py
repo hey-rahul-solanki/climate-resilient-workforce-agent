@@ -6,13 +6,16 @@ a separately authorized informational write.
 """
 import os
 import re
+import json
 from datetime import date
 from typing import Annotated
 from pydantic import Field, ValidationError
 
 import httpx
 from mcp.server.fastmcp import FastMCP
-from workforce_agent.agent import Constraints, Reply, AnnotationReply
+from workforce_agent.agent import Constraints, Reply, Suggestion, AnnotationReply
+from workforce_agent.schemas import SafetyPolicy, WeatherForecast
+from workforce_agent.schemas.calendar import DayCalendarResponse, DayContextSubmission, WarningMatch
 
 mcp = FastMCP('Climate Workforce — validated planning')
 SessionId = Annotated[str, Field(pattern=r'^[A-Za-z0-9_-]{43}$')]
@@ -26,7 +29,7 @@ class MCPServiceError(ValueError):
         super().__init__(f'{code}: {message}')
 
 
-def request(method: str, path: str, body=None) -> Reply:
+def request(method: str, path: str, body=None, response_model=Reply):
     if '/sessions/' in path and not re.fullmatch(r'/sessions/[A-Za-z0-9_-]{43}(?:/(?:chat|proposals|monitoring|warning-pass|annotations))?', path):
         raise MCPServiceError('invalid-input','Invalid session ID')
     token = os.environ.get('WORKFORCE_AGENT_TOKEN')
@@ -47,7 +50,7 @@ def request(method: str, path: str, body=None) -> Reply:
                 code,message=codes.get(response.status_code,('backend-unavailable','Backend rejected the request; retry or inspect service health'))
                 raise MCPServiceError(code,message)
             try:
-                return Reply.model_validate(response.json())
+                return response_model.model_validate(response.json())
             except (ValidationError,ValueError):
                 raise MCPServiceError('invalid-response','Backend returned an invalid structured response; no success asserted') from None
     except httpx.TimeoutException:
@@ -61,6 +64,65 @@ def request(method: str, path: str, body=None) -> Reply:
 def create_supervisor_session(day: date, site_id: str = 'VAD-PLANT-01') -> Reply:
     """Create an isolated, expiring session authorized for the configured credential."""
     return request('POST', '/sessions', {'day':day.isoformat(), 'site_id':site_id})
+
+
+@mcp.tool()
+def analyze_consumer_schedule(context: DayContextSubmission, policy: SafetyPolicy) -> DayCalendarResponse:
+    """Analyze a consumer-owned schedule and site policy against backend weather.
+
+    Requires read permission for context.site.id. Provide raw source activities and the
+    applicable site safety policy, without derived status/warning fields. Weather is
+    fetched by the backend. Unavailable, stale, or incomplete evidence yields needs-review.
+    This tool never writes the source calendar.
+    """
+    return request('POST', '/analysis/consumer-schedule', {
+        'context': context.model_dump(mode='json'),
+        'policy': policy.model_dump(mode='json'),
+    }, DayCalendarResponse)
+
+
+@mcp.resource('climate://schemas/day-calendar-response')
+def day_calendar_schema() -> str:
+    """Canonical selected-day calendar response JSON Schema."""
+    return json.dumps(DayCalendarResponse.model_json_schema(), sort_keys=True)
+
+
+@mcp.resource('climate://schemas/climate-evidence')
+def climate_evidence_schema() -> str:
+    """Canonical warning, weather and safety policy JSON Schemas."""
+    return json.dumps({
+        'WarningMatch': WarningMatch.model_json_schema(),
+        'WeatherForecast': WeatherForecast.model_json_schema(),
+        'SafetyPolicy': SafetyPolicy.model_json_schema(),
+    }, sort_keys=True)
+
+
+@mcp.resource('climate://schemas/planning-responses')
+def planning_response_schemas() -> str:
+    """Canonical agent reply, proposal and annotation response JSON Schemas."""
+    return json.dumps({
+        'Reply': Reply.model_json_schema(),
+        'Suggestion': Suggestion.model_json_schema(),
+        'AnnotationReply': AnnotationReply.model_json_schema(),
+    }, sort_keys=True)
+
+
+@mcp.resource('climate://schemas/usage')
+def climate_usage() -> str:
+    """Interpretation, permissions, time and interval semantics for MCP results."""
+    return (
+        'Canonical models are DayCalendarResponse, CalendarActivity, WeatherForecast, '
+        'SafetyPolicy, WarningMatch, and structured Reply/Suggestion responses. '
+        'Timestamps are ISO-8601 with timezone offsets; intervals are half-open [start, end). '
+        'Calendar dates and HH:MM constraints use the site IANA timezone. '
+        'Statuses affected, needs-review, and unflagged are operational classifications, '
+        'not safety clearance. Weather status/source/updated_at and forecast quality describe '
+        'freshness and provenance. WarningMatch contains the exact overlap, severity, rationale, '
+        'and optional policy reference. Every day-context or session tool requires an authenticated '
+        'credential with read permission and access to the requested site. Errors use stable '
+        'codes such as authentication-required, forbidden, not-found, invalid-input, and '
+        'backend-unavailable; missing or stale context must be treated as needs-review.'
+    )
 
 
 @mcp.tool()

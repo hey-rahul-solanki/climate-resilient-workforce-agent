@@ -9,15 +9,27 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from workforce_agent.agent import AgentError, AgentService, Constraints, Principal, Reply, AnnotationReply
 from workforce_agent.config import get_settings
+from workforce_agent.schemas import SafetyPolicy
+from workforce_agent.schemas.calendar import DayCalendarResponse, DayContextSubmission
+from workforce_agent.weather.client import build_weather_client
 
 router = APIRouter(prefix='/api/agent', tags=['Climate agent'])
+
+
+class ConfiguredWeatherClient:
+    """Resolve weather configuration at request time so bad/unavailable providers fail closed."""
+    def get_forecast(self, site, window):
+        return build_weather_client(get_settings()).get_forecast(site, window)
+
+
 def build_agent_service():
     settings=get_settings()
     reasoning=None
     if settings.reasoning_provider=='vertex':
         from workforce_agent.reasoning import ReasoningService, VertexGeminiProvider
         reasoning=ReasoningService(VertexGeminiProvider(settings),input_rate=settings.model_input_usd_per_million,output_rate=settings.model_output_usd_per_million)
-    return AgentService(approval_store=ApprovalStore(settings.approval_db_path),reasoning=reasoning)
+    return AgentService(approval_store=ApprovalStore(settings.approval_db_path),reasoning=reasoning,
+                        weather_client=ConfiguredWeatherClient())
 
 
 service = build_agent_service()
@@ -51,6 +63,18 @@ class SessionRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     day: date
     site_id: str = 'VAD-PLANT-01'
+
+
+class ConsumerScheduleAnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    context: DayContextSubmission
+    policy: SafetyPolicy
+
+
+@router.post('/analysis/consumer-schedule', response_model=DayCalendarResponse)
+def analyze_consumer_schedule(body: ConsumerScheduleAnalysisRequest, principal: Principal = Depends(identity)):
+    """Analyze caller-supplied schedule and policy using backend-owned weather."""
+    return invoke(service.analyze_consumer_schedule, principal, body.context, body.policy)
 
 
 class ChatRequest(BaseModel):

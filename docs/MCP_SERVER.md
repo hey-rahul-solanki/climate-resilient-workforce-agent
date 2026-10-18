@@ -2,9 +2,9 @@
 
 ## Status and shared application boundary
 
-Implemented: local stdio MCP transport using the official Python SDK (`mcp>=1.28,<2`,
-tested with 1.30.0), typed tool schemas, authenticated REST bridge, shared deterministic
-warning/suggestion services, session ownership/expiry, proposal-only actions and
+Implemented: local stdio MCP transport using the official Python SDK (`mcp>=1.28,<2`),
+typed tool schemas and canonical schema/usage resources, authenticated REST bridge, shared deterministic
+context/warning/suggestion services, session ownership/expiry, proposal-only actions and
 separately enabled note annotation. No MCP approval or event-time write tool exists.
 
 The stdio adapter does not duplicate forecasting, policy or scheduling logic. It
@@ -58,10 +58,13 @@ The placeholder is not a functional credential. Provision it through the client'
 secret facility/environment and matching backend grants. Start with read-only
 permission and add propose/annotate only where explicitly needed.
 
-A runnable SDK client example is `python scripts/mcp_client_example.py`. It uses
-stdio initialization/discovery, creates a fixture session, reads affected activity
-context and makes proposals. It changes no event times and leaves the session to
-expire after 30 minutes. It requires read/propose/site grants, not approve or annotate.
+A runnable SDK client example is `python scripts/mcp_client_example.py`. It discovers
+tools/resources, prepares consumer-owned calendar data and its site safety policy, then
+calls `analyze_consumer_schedule`. The backend checks the credential's read grant and
+fetches weather through its configured provider. It computes warning matches and freshness
+from that forecast and the supplied policy. Policy provenance is returned in the analysis;
+the policy is input evidence, not a safety clearance. Unavailable or stale forecast data
+produces `needs-review`. Analysis never writes to the source calendar.
 
 ## Tool schemas and permissions
 
@@ -72,6 +75,7 @@ nonempty stable event ID within the selected session/day (maximum 100 characters
 
 | Tool | Input | Permission | Output/action |
 | --- | --- | --- | --- |
+| `analyze_consumer_schedule` | canonical `context` and applicable `policy` | read + submitted site | backend fetches weather and analyzes it against the supplied policy; returns exact warning overlaps and freshness evidence; no source writes |
 | `create_supervisor_session` | ISO `day`, `site_id` | read + site | `Reply` with isolated expiring session |
 | `list_affected_activities` | session_id | owner + read + site | all affected/review context with exact warning intersections |
 | `get_climate_suggestions` | session_id | owner + read + site | existing structured suggestions, no proposal creation |
@@ -90,6 +94,19 @@ Each suggestion includes current/proposed times, validation/checks, rationale,
 warning/policy references, infeasibility reasons and pending/terminal approval state.
 The model metadata distinguishes configured/returned model versions and verified
 response status; none constitutes safety clearance.
+
+MCP resource discovery also publishes `climate://schemas/day-calendar-response`,
+`climate://schemas/climate-evidence`, `climate://schemas/planning-responses`, and
+`climate://schemas/usage`. These contain JSON Schemas derived from the canonical
+Pydantic models, including `Reply`, `Suggestion`, and `AnnotationReply`. The usage resource
+documents timezone-aware ISO-8601 timestamps, half-open `[start, end)` intervals,
+site-local dates, classification/freshness semantics, warning evidence, required
+read/site permissions, and stable error handling. `analyze_consumer_schedule` accepts the
+existing `DayContextSubmission` envelope built from `DaySite`, `DayEmployee`, and
+`CalendarActivity` source records, plus the applicable `SafetyPolicy`. Weather forecasts
+remain backend-owned. It rejects caller-supplied derived warning/status
+fields and returns the existing `DayCalendarResponse` with mode
+`consumer-submitted`. Tool outputs remain typed MCP schemas as well.
 
 `AnnotationReply.monitoring.last_run` is typed: timestamp, overall result and
 per-event `{activity_id, result, message?}`. Results are `updated`, `unchanged`,
