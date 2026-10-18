@@ -67,6 +67,27 @@ def create_supervisor_session(day: date, site_id: str = 'VAD-PLANT-01') -> Reply
 
 
 @mcp.tool()
+def climate_agent(message: Annotated[str, Field(min_length=1,max_length=2000)],
+                  day: date | None = None, site_id: str = 'VAD-PLANT-01',
+                  session_id: SessionId | None = None) -> Reply:
+    """Primary agent entry point. Uses server-authorized schedule/weather/policy context.
+
+    Start a conversation by providing day and site_id; the backend supplies its
+    available operational context and returns a 30-minute session_id. For follow-up
+    turns, pass that session_id. Do not send client schedules, policies, credentials,
+    or identity claims. Clear requests use deterministic handling; other requests
+    may use the configured reasoning provider. All proposals are deterministically
+    validated and remain pending supervisor review.
+    """
+    if session_id is None:
+        if day is None:
+            raise MCPServiceError('invalid-input','Provide day when starting a new session')
+        created = request('POST', '/sessions', {'day':day.isoformat(), 'site_id':site_id})
+        session_id = created.session_id
+    return request('POST', f'/sessions/{session_id}/chat', {'message':message})
+
+
+@mcp.tool()
 def analyze_consumer_schedule(context: DayContextSubmission, policy: SafetyPolicy) -> DayCalendarResponse:
     """Analyze a consumer-owned schedule and site policy against backend weather.
 
@@ -145,7 +166,7 @@ def create_rescheduling_proposal(session_id: SessionId, constraints: Constraints
 
 @mcp.tool()
 def supervisor_chat(session_id: SessionId, message: Annotated[str, Field(min_length=1,max_length=2000)]) -> Reply:
-    """Converse using the deterministic grammar; unsupported intent asks clarification."""
+    """Continue a session; clear supported requests use deterministic handling and other intent may use Gemini."""
     return request('POST', f'/sessions/{session_id}/chat', {'message':message})
 
 

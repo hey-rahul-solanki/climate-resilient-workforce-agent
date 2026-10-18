@@ -44,7 +44,7 @@ def test_mcp_schema_and_api_parity(monkeypatch):
     async def exercise():
         tools = await mcp_server.mcp.list_tools()
         names = {t.name for t in tools}
-        assert names == {'create_supervisor_session','analyze_consumer_schedule','list_affected_activities','get_climate_suggestions','create_rescheduling_proposal','supervisor_chat','configure_warning_notes','annotate_warning_notes','propose_reschedule','annotate_affected_activity'}
+        assert names == {'climate_agent','create_supervisor_session','analyze_consumer_schedule','list_affected_activities','get_climate_suggestions','create_rescheduling_proposal','supervisor_chat','configure_warning_notes','annotate_warning_notes','propose_reschedule','annotate_affected_activity'}
         proposal = next(t for t in tools if t.name == 'create_rescheduling_proposal')
         assert 'constraints' in proposal.inputSchema['properties']
         assert proposal.outputSchema

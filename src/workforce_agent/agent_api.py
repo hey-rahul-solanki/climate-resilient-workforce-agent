@@ -26,8 +26,8 @@ def build_agent_service():
     settings=get_settings()
     reasoning=None
     if settings.reasoning_provider=='vertex':
-        from workforce_agent.reasoning import ReasoningService, VertexGeminiProvider
-        reasoning=ReasoningService(VertexGeminiProvider(settings),input_rate=settings.model_input_usd_per_million,output_rate=settings.model_output_usd_per_million)
+        from workforce_agent.reasoning import ReasoningService, VertexADKProvider
+        reasoning=ReasoningService(VertexADKProvider(settings),input_rate=settings.model_input_usd_per_million,output_rate=settings.model_output_usd_per_million)
     return AgentService(approval_store=ApprovalStore(settings.approval_db_path),reasoning=reasoning,
                         weather_client=ConfiguredWeatherClient())
 

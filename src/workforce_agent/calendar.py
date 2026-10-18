@@ -228,7 +228,7 @@ def demo_calendar(day: date, *, include_suggestions=True):
                 integrations={'agent': 'Simulated · no Gemini connection', 'mcp': 'Not connected', 'calendar': 'Demo · writes disabled'})
 
 
-def validated_suggestions(activities, forecast, policy, lower, upper):
+def validated_suggestions(activities, forecast, policy, lower, upper, *, target_ids=None):
     """Greedy proposals on a 15-minute grid, reserved together and never applied.
 
     This bounded demo planner handles employee and location conflicts. Live
@@ -238,6 +238,8 @@ def validated_suggestions(activities, forecast, policy, lower, upper):
     reservations = deepcopy(activities)
     suggestions = []
     for activity in activities:
+        if target_ids is not None and activity['id'] not in target_ids:
+            continue
         if not activity['warning_ids']:
             continue
         duration = datetime.fromisoformat(activity['end']) - datetime.fromisoformat(activity['start'])

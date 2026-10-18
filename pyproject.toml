@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-vertex = ["google-genai>=2.31,<3"]
+vertex = ["google-adk>=1.39,<2"]
 mcp = ["mcp>=1.28,<2"]
 dev = [
     "pytest>=8.0",
