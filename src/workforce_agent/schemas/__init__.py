@@ -41,6 +41,9 @@ from workforce_agent.schemas.entities import (
 )
 
 __all__ = [
+    "CalendarActivity",
+    "WarningMatch",
+    "DayCalendarResponse",
     "BaselineSnapshot",
     "BreakRequirements",
     "Certification",
@@ -79,3 +82,5 @@ __all__ = [
     "WorkRestRule",
     "Worker",
 ]
+
+from workforce_agent.schemas.calendar import CalendarActivity, DayCalendarResponse, WarningMatch

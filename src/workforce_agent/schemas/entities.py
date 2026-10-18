@@ -336,6 +336,10 @@ OperationalConstraint = SafetyRule
 
 
 class SafetyPolicy(StrictModel):
+    source: str | None = Field(default=None, min_length=1)
+    illustrative: bool = False
+    applies_to_site_ids: list[str] = Field(default_factory=list)
+    applies_to_work_locations: list[str] = Field(default_factory=list)
     policy_id: str = Field(..., min_length=1)
     name: str = Field(..., min_length=1)
     version: str = Field(..., min_length=1)

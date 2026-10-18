@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from workforce_agent.config import get_settings
@@ -34,7 +34,10 @@ from workforce_agent.weather.exceptions import (
 
 logger = logging.getLogger("workforce_agent.api")
 
+from workforce_agent.agent_api import agent_lifespan
+
 app = FastAPI(
+    lifespan=agent_lifespan,
     title="Climate-Resilient Workforce Agent API",
     version="0.1.0",
     description="HTTP API for climate-resilient workforce scheduling, weather ingestion, and safety policies.",
@@ -178,6 +181,56 @@ def run() -> None:
     import uvicorn
 
     uvicorn.run("workforce_agent.api:app", host="0.0.0.0", port=8000, reload=True)
+
+
+@app.get('/api/calendar/demo', tags=['Calendar'])
+def get_demo_calendar(day: str = '2026-10-17'):
+    """Explicit fixture endpoint; never represents connected calendar or forecast data."""
+    from datetime import date
+    from workforce_agent.calendar import demo_calendar
+    try:
+        return demo_calendar(date.fromisoformat(day))
+    except ValueError as err:
+        raise HTTPException(status_code=422, detail='Expected an ISO date') from err
+
+
+from datetime import date as CalendarDate
+from workforce_agent.agent import Principal
+from workforce_agent.agent_api import identity
+from workforce_agent.day_schedule import get_day_schedule
+from workforce_agent.schemas.calendar import DayCalendarResponse
+
+
+@app.get('/api/calendar/day', response_model=DayCalendarResponse, tags=['Calendar'])
+def get_calendar_day(response: Response, site_id: str, date: CalendarDate, principal: Principal = Depends(identity)):
+    """Read one site-local day; fixture source is explicit and provider credentials are unnecessary."""
+    response.headers['Cache-Control'] = 'no-store'
+    if 'read' not in principal.permissions or site_id not in principal.sites:
+        raise HTTPException(403, 'Not authorized to read this site schedule')
+    try:
+        return get_day_schedule(site_id,date)
+    except KeyError as err:
+        raise HTTPException(404, 'No schedule source configured for this site') from err
+
+
+from workforce_agent.agent_api import router as agent_router
+app.include_router(agent_router)
+from workforce_agent.planning_api import router as planning_router
+app.include_router(planning_router)
+
+
+@app.middleware('http')
+async def protect_agent_requests(request, call_next):
+    if request.url.path.startswith('/api/agent'):
+        # JSON-only mutations prevent form-based cross-origin requests. Cookie
+        # identities additionally use SameSite=strict; bearer tokens stay server-side.
+        if request.method in ('POST', 'DELETE') and not request.headers.get('content-type', '').startswith('application/json'):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=415, content={'detail':'Agent actions require application/json'})
+        response = await call_next(request)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    return await call_next(request)
 
 
 if __name__ == "__main__":
