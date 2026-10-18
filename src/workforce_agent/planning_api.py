@@ -22,14 +22,17 @@ class ServiceSessionRequest(BaseModel):
 class SuggestedAction(BaseModel):
     proposal_id: str
     activity_id: str
+    current_activity: dict | None = None
     suggested_action: Literal['reschedule','request-review']
     current_window: TimeWindow | None
     proposed_window: TimeWindow | None
+    candidate_window: TimeWindow | None = None
+    requested_constraints: Constraints = Field(default_factory=Constraints)
     rationale: str
     warning_ids: list[str]
     warning_references: list[WarningMatch]
     policy_references: list[str]
-    validation_status: Literal['demo-validated','no-feasible-slot','needs-review']
+    validation_status: Literal['demo-validated','risk-reduced','no-feasible-slot','needs-review']
     validation_checks: dict[str,bool]
     infeasibility_reasons: list[str]
     requires_supervisor_approval: bool = True
@@ -66,6 +69,9 @@ def project(reply: Reply) -> PlanningResponse:
             suggested_action='reschedule' if suggestion.start and suggestion.end else 'request-review',
             current_window=TimeWindow(start=current['start'],end=current['end']) if current else None,
             proposed_window=TimeWindow(start=suggestion.start,end=suggestion.end) if suggestion.start and suggestion.end else None,
+        candidate_window=suggestion.candidate_window,
+        current_activity=current,
+        requested_constraints=suggestion.requested_constraints,
             rationale=suggestion.rationale,warning_ids=suggestion.warning_ids,
             warning_references=suggestion.warning_matches,policy_references=[suggestion.policy],
             validation_status=suggestion.validation,validation_checks=suggestion.validation_checks,

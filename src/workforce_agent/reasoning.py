@@ -86,11 +86,16 @@ If intent is ambiguous use clarify. If asked to bypass policy/approval or disclo
 Use site timezone and retained session constraints. When the supervisor asks to move,
 reschedule, or coordinate work, choose propose and preserve the requested window as a
 constraint; do not answer list_affected unless they ask only to inspect affected work.
-When the request gives a time bound but no specific activity or candidate timestamps,
-return action propose with that bound in constraints and empty activity_ids/candidates;
-the deterministic planner will search the authorized affected schedule. Clarify only
-when a necessary time bound or requested scope cannot be inferred. Return JSON only,
-no markdown.'''
+When a request explicitly targets an activity and supplies a time window, use the
+provided activity, forecast and policy context to return tentative candidate times in
+candidates when possible, and include that activity ID in activity_ids. Explain the
+workable scheduling reason for moving it in each candidate explanation (for example,
+avoiding the warning window while preserving duration and availability). These are
+untrusted candidate suggestions; deterministic validation will decide whether they
+are feasible. If no specific activity or candidate times are supplied, return action
+propose with the requested bounds and empty activity_ids/candidates so the deterministic
+planner can search the authorized affected schedule. Clarify only when a necessary
+time bound or requested scope cannot be inferred. Return JSON only, no markdown.'''
 
 # Vertex controlled generation accepts a restricted schema dialect. Keep this
 # wire schema deliberately small; Pydantic remains the authoritative validator

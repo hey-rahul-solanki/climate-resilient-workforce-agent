@@ -92,7 +92,9 @@ export function ClimateAgentPanel(props: Props) {
   const range = (start: string, end: string) => `${time(start)} – ${time(end)}`;
   async function request<T = Reply>(path: string, body?: unknown, method = 'POST'): Promise<T | null> {
     const version = contextVersion.current;
-    const response = await fetch(`/api/agent${path}`, {method, credentials: 'include', headers: {'Content-Type':'application/json'}, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000)});
+    // A Gemini/Vertex interpretation can take longer than the former 15s
+    // browser deadline (the backend model timeout is configurable up to 30s).
+    const response = await fetch(`/api/agent${path}`, {method, credentials: 'include', headers: {'Content-Type':'application/json'}, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(45000)});
     if (!mounted.current || version !== contextVersion.current) throw new Error('Calendar context changed; response discarded.');
     if (!response.ok) {
       const failure = await response.json().catch(() => ({})) as {detail?: string};
@@ -108,6 +110,9 @@ export function ClimateAgentPanel(props: Props) {
     props.onCalendar(reply.calendar);
     setSession(reply); setMessages(previous => [...previous, `${reply.clarification ? 'Clarification' : 'Agent'}: ${reply.message}`].slice(-20));
     setSuggestions(reply.suggestions); setReview(null);
+    const selectedProposal = reply.suggestions.find(s => s.activity_id === props.selectedActivity
+      && (s.start && s.end || s.candidate_window));
+    onPreviewProposal?.(selectedProposal ?? null);
     setChatState(reply.clarification ? 'Clarification needed — please provide more detail.' : 'Backend response received. Proposals remain subject to approval; update results appear in decision history.');
     if (reply.constraints.earliest) setEarliest(reply.constraints.earliest);
     if (reply.constraints.latest) setLatest(reply.constraints.latest);
@@ -141,10 +146,17 @@ export function ClimateAgentPanel(props: Props) {
       {!session && <p role="status">{busy ? 'Connecting to the climate agent…' : 'Agent connection required. Retry from the chat panel.'}</p>}
       {session && <button disabled={busy} onClick={() => {
         setProposalNotice('Sending request to the climate agent…');
-        setMessages(previous => [...previous, `You: Prepare validated proposals${selected ? ` for ${selected.title}` : ''}.`].slice(-20));
+        const activityTitle = selected?.title ?? 'affected activities';
+        const employeeName = props.employees.find(employee => employee.id === selected?.employee_id)?.name;
+        const details = selected
+          ? ` (ID ${selected.id}; ${selected.kind}; currently ${range(selected.start, selected.end)}; ${employeeName ?? 'employee unavailable'}; ${selected.location ?? 'location unavailable'})`
+          : '';
+        const windowStart = earliest || '06:00';
+        const windowEnd = latest || '18:00';
+        setMessages(previous => [...previous, `You: Prepare validated proposals for ${activityTitle}${details} on ${props.day} at ${props.siteId}, within ${windowStart}–${windowEnd} ${props.timezone} time.`].slice(-20));
         void perform(async () => {
           try {
-            const reply = await request(`/sessions/${session.session_id}/proposals`, {earliest:earliest || null, latest:latest || null});
+            const reply = await request(`/sessions/${session.session_id}/proposals`, {earliest:earliest || null, latest:latest || null, activity_id:props.selectedActivity});
             if (!reply) throw new Error('No confirmation received from the climate agent.');
             accept(reply);
             setProposalNotice('Message sent to the agent. You can close this window and check the Climate agent panel for the response.');
@@ -157,7 +169,7 @@ export function ClimateAgentPanel(props: Props) {
       {proposalNotice && <div className="proposal-notification" role="status" aria-live="polite"><p>{proposalNotice}</p>{!busy && <button onClick={props.onDismissActivity}>Close and check Climate agent</button>}</div>}
 
     <AgentSuggestions compact demoPolicies={props.demoPolicies ?? props.mode==='demo'} suggestions={suggestions.filter(s => s.activity_id === props.selectedActivity)} activities={props.activities} employees={props.employees} warnings={props.warnings} timezone={props.timezone} selectedActivity={props.selectedActivity} loading={busy} error={error} onRetry={() => {if(retryAction) void perform(retryAction);}} onSelect={s => {
-      props.onSelectActivity(s.activity_id); onPreviewProposal?.((s.approval ?? 'pending')==='pending' && s.start && s.end ? s : null); setConfirmed(false); setDecisionReason('');
+      props.onSelectActivity(s.activity_id); onPreviewProposal?.((s.approval ?? 'pending')==='pending' && (s.start && s.end || s.candidate_window) ? s : null); setConfirmed(false); setDecisionReason('');
       const activity=props.activities.find(a=>a.id===s.activity_id);
       setReview({proposal:s,current:activity ? {...activity,location:activity.location ?? 'Unknown location',version:activity.version ?? 1} : null,employees:props.employees.filter(e=>e.id===activity?.employee_id),checks:{},conflicts:[],climate_rationale:s.rationale,annotation:'Read-only proposal preview. Fresh backend review is required before approval.',server_reviewed:false});
       if(session) void perform(async()=>{const result=await request<Review>(`/sessions/${session.session_id}/proposals/${s.id}/review`,undefined,'GET'); if(result) setReview({...result,server_reviewed:true});});

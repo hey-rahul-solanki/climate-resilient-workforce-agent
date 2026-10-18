@@ -52,9 +52,9 @@ def identity(request: Request) -> Principal:
     raise HTTPException(401, 'Authentication required; demo login must be explicitly enabled')
 
 
-def invoke(action, *args):
+def invoke(action, *args, **kwargs):
     try:
-        return action(*args)
+        return action(*args, **kwargs)
     except AgentError as error:
         raise HTTPException(error.status, error.message) from error
 
@@ -115,9 +115,15 @@ def chat(sid: str, body: ChatRequest, principal: Principal = Depends(identity)):
     return invoke(service.chat, sid, principal, body.message)
 
 
+class ProposalRequest(Constraints):
+    activity_id: str | None = None
+
+
 @router.post('/sessions/{sid}/proposals', response_model=Reply)
-def propose(sid: str, body: Constraints, principal: Principal = Depends(identity)):
-    return invoke(service.propose, sid, principal, body)
+def propose(sid: str, body: ProposalRequest, principal: Principal = Depends(identity)):
+    constraints = Constraints(earliest=body.earliest, latest=body.latest)
+    target_ids = [body.activity_id] if body.activity_id else None
+    return invoke(service.request_proposals, sid, principal, constraints, target_ids=target_ids)
 
 
 @router.delete('/sessions/{sid}', status_code=204)

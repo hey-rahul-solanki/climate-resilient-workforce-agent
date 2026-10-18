@@ -5,6 +5,12 @@ from zoneinfo import ZoneInfo
 from workforce_agent.calendar import analyze_calendar
 
 
+def warning_overlap_minutes(activity):
+    return sum(max(0, (datetime.fromisoformat(match['overlap']['end']) -
+                       datetime.fromisoformat(match['overlap']['start'])).total_seconds() / 60)
+               for match in activity.get('warning_matches', []))
+
+
 def validate_model_candidates(plan, calendar, forecast, policy, constraints, *, evaluation_time):
     reservations = [dict(a) for a in calendar['activities']]
     results = []
@@ -24,14 +30,26 @@ def validate_model_candidates(plan, calendar, forecast, policy, constraints, *, 
             weather_policy=False)
         proposed={**original,'start':candidate.start.isoformat(),'end':candidate.end.isoformat()}
         analysis=analyze_calendar([proposed]+[a for a in reservations if a['id']!=original['id']],forecast,policy,now=evaluation_time)
-        checks['weather_policy']=analysis['activities'][0]['status']=='unflagged'
+        analyzed=analysis['activities'][0]
+        remaining_overlap=warning_overlap_minutes(analyzed)
+        original_overlap=warning_overlap_minutes(original)
+        # A supervisor may accept residual warning overlap when the move
+        # materially reduces exposure. Hard policy/rest blocks still fail.
+        hard_blocks=[b for b in analyzed.get('policy_blocks',[]) if b.get('code') != 'climate-warning']
+        reduced=remaining_overlap < original_overlap
+        checks['weather_policy']=(analyzed['status']=='unflagged' or
+                                  (analyzed['status']=='affected' and reduced and not hard_blocks))
+        risk_reduced=checks['weather_policy'] and analyzed['status']!='unflagged'
         valid=all(checks.values())
         if valid:
             reservations=[proposed if a['id']==original['id'] else a for a in reservations]
         results.append(dict(id=f"candidate-{original['id']}",activity_id=original['id'],
             start=proposed['start'] if valid else None,end=proposed['end'] if valid else None,
-            rationale='Deterministic validation accepted this demo candidate; supervisor approval and fresh revalidation remain required.' if valid else 'Model candidate failed deterministic checks; revision/review is required.',
-            validation='demo-validated' if valid else 'needs-review',validation_checks=checks,
+            candidate_window=dict(start=proposed['start'],end=proposed['end']),
+            rationale=(f'{candidate.explanation} ' + (f'The move reduces climate-warning overlap from {original_overlap:g} to {remaining_overlap:g} minutes; residual overlap remains and requires supervisor acknowledgement and a reason. '
+                       if risk_reduced else 'Deterministic validation accepted this candidate; supervisor approval and fresh revalidation remain required. ')
+                       if valid else f'{candidate.explanation} The candidate failed deterministic checks; review or revision is required.'),
+            validation='risk-reduced' if valid and risk_reduced else 'demo-validated' if valid else 'needs-review',validation_checks=checks,
             infeasibility_reasons=[key for key,passed in checks.items() if not passed],
             policy_blocks=analysis['activities'][0].get('policy_blocks',[]),policy_context=analysis['activities'][0].get('policy_context'),
             model_explanation=candidate.explanation,warning_ids=original['warning_ids'],

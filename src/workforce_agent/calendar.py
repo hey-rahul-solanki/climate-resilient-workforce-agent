@@ -243,7 +243,7 @@ def validated_suggestions(activities, forecast, policy, lower, upper, *, target_
         if not activity['warning_ids']:
             continue
         duration = datetime.fromisoformat(activity['end']) - datetime.fromisoformat(activity['start'])
-        candidate, chosen = lower, None
+        candidate, chosen, chosen_analysis = lower, None, None
         while candidate + duration <= upper:
             end = candidate + duration
             replacement = {**activity, 'start':candidate.isoformat(), 'end':end.isoformat()}
@@ -252,16 +252,25 @@ def validated_suggestions(activities, forecast, policy, lower, upper, *, target_
                            (a['employee_id'] == activity['employee_id'] or a['location'] == activity['location']) and
                            candidate < datetime.fromisoformat(a['end']) and end > datetime.fromisoformat(a['start'])
                            for a in reservations)
-            if not conflict and validation['activities'][0]['status'] == 'unflagged' and activity['status'] != 'needs-review':
+            analyzed=validation['activities'][0]
+            old_overlap=sum((datetime.fromisoformat(w['overlap']['end'])-datetime.fromisoformat(w['overlap']['start'])).total_seconds() for w in activity.get('warning_matches',[]))
+            new_overlap=sum((datetime.fromisoformat(w['overlap']['end'])-datetime.fromisoformat(w['overlap']['start'])).total_seconds() for w in analyzed.get('warning_matches',[]))
+            hard_blocks=[b for b in analyzed.get('policy_blocks',[]) if b.get('code') != 'climate-warning']
+            policy_ok=analyzed['status']=='unflagged' or (analyzed['status']=='affected' and new_overlap<old_overlap and not hard_blocks)
+            if not conflict and policy_ok and activity['status'] != 'needs-review':
                 chosen = replacement
+                chosen_analysis = analyzed
                 break
             candidate += timedelta(minutes=15)
         if chosen:
             reservations = [chosen if a['id'] == activity['id'] else a for a in reservations]
+        risk_reduced=bool(chosen and chosen_analysis['status']!='unflagged')
         suggestions.append(dict(id=f"proposal-{activity['id']}", activity_id=activity['id'],
             start=chosen['start'] if chosen else None, end=chosen['end'] if chosen else None,
-            validation='demo-validated' if chosen else 'needs-review' if activity['status'] == 'needs-review' else 'no-feasible-slot',
-            rationale='Validated against demo forecast/policy, duration, employee/location conflicts and requested window; approval required.' if chosen else (f'Required duration {duration.total_seconds()/60:g} minutes exceeds the requested {(upper-lower).total_seconds()/60:g}-minute window; no feasible slot.' if duration > upper-lower else 'Every candidate conflicts with a climate warning or employee/location availability under the demo policy; no feasible slot.'),
+            validation='risk-reduced' if risk_reduced else 'demo-validated' if chosen else 'needs-review' if activity['status'] == 'needs-review' else 'no-feasible-slot',
+            rationale=((f"Moved to reduce overlap with the flagged climate window ({activity['reason']}); residual warning overlap remains. Preserves duration and avoids employee/location conflicts. Supervisor acknowledgement and a reason are required."
+                       if risk_reduced else f"Moved outside the flagged climate window ({activity['reason']}); preserves the original duration and avoids employee/location conflicts within the requested window. Supervisor approval is required.")
+                       if chosen else (f'Required duration {duration.total_seconds()/60:g} minutes exceeds the requested {(upper-lower).total_seconds()/60:g}-minute window; no feasible slot.' if duration > upper-lower else 'Every candidate conflicts with a climate warning or employee/location availability under the demo policy; no feasible slot.')),
             warning_ids=activity['warning_ids'], warning_matches=activity.get('warning_matches',[]),
             infeasibility_reasons=[] if chosen else ['unknown-inputs'] if activity['status']=='needs-review' else ['duration-exceeds-window'] if duration>upper-lower else ['climate-or-availability-conflict'],
             validation_checks={'policy_and_availability': bool(chosen)},

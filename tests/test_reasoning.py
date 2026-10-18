@@ -72,6 +72,17 @@ def test_scoped_request_without_candidates_creates_no_out_of_scope_proposals():
     assert service.approvals.proposals(sid)==before
 
 
+def test_model_clarification_shows_the_question_instead_of_internal_status_code():
+    case=next(case for case in CASES if case['id']=='ambiguous')
+    service,sid=create(FixtureProvider(case['output']))
+    reply=service.chat(sid,principal(),'This is my proposal for Meera Shah')
+    assert reply.request_status=='clarification'
+    assert reply.clarification
+    assert 'Which activity and latest finish' in reply.message
+    assert 'interpreted' not in reply.message
+    assert reply.suggestions==[]
+
+
 def test_expiry_and_changed_constraints_during_inference_fail_closed():
     now=datetime(2026,10,17,tzinfo=timezone.utc)
     provider=FixtureProvider(CASES[0]['output']); service,sid=create(provider,clock=lambda:now,ttl_seconds=60)
