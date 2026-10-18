@@ -5,6 +5,7 @@ import type { AgentSuggestion } from './AgentSuggestions';
 import { FlaggedActivities } from './FlaggedActivities';
 import { ProposalReview } from './ProposalReview';
 import type { ProposalReviewData } from './ProposalReview';
+import { ChatMarkdown } from './ChatMarkdown';
 
 type Suggestion = AgentSuggestion;
 type Warning = { id: string; title: string; start: string; end: string; policy: string; measure: string };
@@ -130,7 +131,15 @@ export function ClimateAgentPanel(props: Props) {
       {props.mode !== 'demo' && <p>Live agent and authenticated sign-in are not configured.</p>}
       <p id="chat-help">Enter sends a message. A proposal does not change the calendar; review and explicit approval are required.</p>
       <p role="status">{busy ? 'Waiting for backend confirmation…' : chatState}</p>
-      <div role="log" aria-label="Current session conversation" aria-live="polite" aria-relevant="additions" tabIndex={0} className="chat-log">{messages.map((message,i) => <p className="chat-message" key={i}>{message}</p>)}</div>
+      <div role="log" aria-label="Current session conversation" aria-live="polite" aria-relevant="additions" tabIndex={0} className="chat-log">{messages.map((message,i) => {
+        const separator = message.indexOf(': ');
+        const speaker = separator >= 0 ? message.slice(0, separator) : '';
+        const content = separator >= 0 ? message.slice(separator + 2) : message;
+        return <div className={`chat-message ${speaker === 'You' ? 'chat-message-user' : 'chat-message-agent'}`} key={i}>
+          {speaker && <strong className="chat-speaker">{speaker}</strong>}
+          {speaker === 'You' ? <p>{content}</p> : <ChatMarkdown text={content} />}
+        </div>;
+      })}</div>
       {session && <details><summary>Affected activities & evidence</summary>{session.context.map(a => <div key={a.activity_id} className="chat-message"><strong>{a.title} · {a.status}</strong><p>{range(a.current_start,a.current_end)} · {a.reason}</p>{a.warnings.map(w => <p key={w.id}>{w.title} · {range(w.start,w.end)} · {w.measure}<br />{w.policy}<br />Reference: {w.id}</p>)}</div>)}</details>}
       <form onSubmit={e => { e.preventDefault(); if (!session || busy || !input.trim()) return; const text = input; setInput(''); setMessages(m => [...m, `You: ${text}`].slice(-20)); void perform(async () => { const reply = await requestTool<Reply>('supervisor_chat', {session_id:session.session_id, message:text}, 100000); accept(reply); }); }}><label className="sr-only" htmlFor="agent-message">Message climate agent</label><input id="agent-message" aria-describedby="chat-help" autoComplete="off" maxLength={2000} disabled={!session || busy} value={input} onChange={e => setInput(e.target.value)} placeholder="Move outdoor inspections before noon" /><button disabled={!session || busy || !input.trim()}>Send</button></form>
       <details className="advanced-agent-controls"><summary>Scheduling constraints & demo controls</summary><form className="constraint-form" onSubmit={e => { e.preventDefault(); if (!session) return; void perform(async () => {const reply = await requestTool<Reply>('propose_reschedule', {session_id:session.session_id, constraints:{earliest:earliest || null, latest:latest || null}}); accept(reply); }); }}><p>Proposal window · {props.timezone}</p><label>Earliest start<input type="time" value={earliest} onChange={e => setEarliest(e.target.value)} /></label><label>Latest finish<input type="time" value={latest} onChange={e => setLatest(e.target.value)} /></label><button disabled={!session || busy}>Prepare validated proposals</button></form>
