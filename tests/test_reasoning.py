@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from workforce_agent.agent import AgentService, Principal, AgentError, Constraints
-from workforce_agent.reasoning import ReasoningService, ProviderResult, VertexGeminiProvider, ModelPlan
+from workforce_agent.reasoning import ReasoningService, ProviderResult, VertexADKProvider, ModelPlan, VERTEX_MODEL_PLAN_SCHEMA
 from workforce_agent.config import Settings
 
 CASES=json.loads(Path('tests/fixtures/agent_evals/cases.json').read_text())
@@ -57,19 +57,30 @@ def test_evaluation_case(case):
 
 def test_provider_failure_is_closed_without_exception_leak_or_silent_fallback():
     service,sid=create(FixtureProvider(TimeoutError('secret-credential-value')))
-    reply=service.chat(sid,principal(),'reschedule before 12:00')
+    reply=service.chat(sid,principal(),'Move maintenance before noon')
     assert reply.request_status=='needs-review' and reply.suggestions==[]
     assert reply.model.status=='provider-error'
     assert 'secret-credential-value' not in reply.model_dump_json()
 
 
 def test_scoped_request_without_candidates_creates_no_out_of_scope_proposals():
-    output={**CASES[0]['output'],'candidates':[]}
+    output={**CASES[0]['output'],'action':'clarify','activity_ids':[],'candidates':[]}
     service,sid=create(FixtureProvider(output))
     before=service.approvals.proposals(sid)
     reply=service.chat(sid,principal(),'Move only panel maintenance before noon')
     assert reply.request_status=='clarification'
     assert service.approvals.proposals(sid)==before
+
+
+def test_model_clarification_shows_the_question_instead_of_internal_status_code():
+    case=next(case for case in CASES if case['id']=='ambiguous')
+    service,sid=create(FixtureProvider(case['output']))
+    reply=service.chat(sid,principal(),'This is my proposal for Meera Shah')
+    assert reply.request_status=='clarification'
+    assert reply.clarification
+    assert 'Which activity and latest finish' in reply.message
+    assert 'interpreted' not in reply.message
+    assert reply.suggestions==[]
 
 
 def test_expiry_and_changed_constraints_during_inference_fail_closed():
@@ -92,46 +103,64 @@ def test_expiry_and_changed_constraints_during_inference_fail_closed():
     assert service.chat(sid,principal(),'Move maintenance before noon').request_status=='needs-review'
 
 
-def test_vertex_adapter_sdk_configuration_and_response_metadata():
-    pytest.importorskip('google.genai')
+def test_backend_expiry_deletes_adk_conversation_session():
+    now=datetime(2026,10,17,tzinfo=timezone.utc)
+    class SessionTrackingProvider(FixtureProvider):
+        deleted=[]
+        def delete_session(self,session_id): self.deleted.append(session_id)
+    provider=SessionTrackingProvider(CASES[0]['output'])
+    service,sid=create(provider,clock=lambda:now,ttl_seconds=1800)
+    now+=timedelta(minutes=31)
+    service.create(principal(),date(2026,10,18))
+    assert provider.deleted==[sid]
+
+
+def test_vertex_adk_agent_uses_adc_structured_output_and_scoped_session(monkeypatch):
+    pytest.importorskip('google.adk')
     captured={}
-    response=SimpleNamespace(candidates=[SimpleNamespace(finish_reason='STOP')],text=json.dumps(CASES[0]['output']),model_version='configured-model-001',usage_metadata=SimpleNamespace(prompt_token_count=5,candidates_token_count=7,thoughts_token_count=2))
-    def generate_content(**kwargs): captured.update(kwargs); return response
-    provider=VertexGeminiProvider(Settings(vertex_project='test-project',vertex_model='configured-model-001'),client=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)))
-    result=provider.generate('Interpret this request',{'activities':[]})
+    result_event=SimpleNamespace(
+        is_final_response=lambda:True,
+        content=SimpleNamespace(parts=[SimpleNamespace(text=json.dumps(CASES[0]['output']))]),
+        model_version='configured-model-001',
+        usage_metadata=SimpleNamespace(prompt_token_count=5,candidates_token_count=7,thoughts_token_count=2))
+    class FakeRunner:
+        def __init__(self,**kwargs): captured['runner']=kwargs
+        async def run_async(self,**kwargs):
+            captured['run']=kwargs
+            yield result_event
+    monkeypatch.setattr('google.adk.runners.Runner',FakeRunner)
+    provider=VertexADKProvider(Settings(vertex_project='test-project',vertex_model='configured-model-001'))
+    result=provider.generate('Interpret this request',{'activities':[],'agent_session_id':'opaque-session'})
     assert result.model_version=='configured-model-001' and result.prompt_tokens==5
-    config=captured['config']
-    assert config.response_mime_type=='application/json'
-    assert config.response_json_schema==ModelPlan.model_json_schema()
-    assert config.temperature==0 and config.max_output_tokens==2048
-    assert 'cannot approve' in config.system_instruction
-    response.candidates[0].finish_reason='MAX_TOKENS'
-    with pytest.raises(ValueError): provider.generate('test',{})
+    agent=captured['runner']['agent']
+    assert agent.output_schema==VERTEX_MODEL_PLAN_SCHEMA
+    assert 'cannot approve' in agent.instruction
+    assert agent.generate_content_config.temperature==0
+    assert captured['run']['session_id']=='opaque-session'
+    assert 'opaque-session' not in captured['run']['new_message'].parts[0].text
+    assert __import__('os').environ['GOOGLE_GENAI_USE_VERTEXAI']=='true'
+    assert __import__('os').environ['GOOGLE_CLOUD_PROJECT']=='test-project'
 
 
 def test_missing_vertex_configuration_fails_closed_without_credentials():
-    reasoning=ReasoningService(VertexGeminiProvider(Settings()))
+    reasoning=ReasoningService(VertexADKProvider(Settings()))
     result=reasoning.interpret('Reschedule inspections',{'activities':[]})
     assert result.status=='needs-review' and result.code=='provider-unavailable'
 
 
-def test_vertex_client_uses_workload_identity_timeout_and_no_api_key(monkeypatch):
-    pytest.importorskip('google.genai')
-    from google import genai
+def test_vertex_adk_configures_bounded_adc_model_calls(monkeypatch):
+    pytest.importorskip('google.adk')
     captured={}
-    response=SimpleNamespace(candidates=[SimpleNamespace(finish_reason='STOP')],text=json.dumps(CASES[0]['output']),model_version='test-model-001',usage_metadata=None)
-    class Client:
-        def __init__(self,**kwargs):
-            captured.update(kwargs)
-            self.models=SimpleNamespace(generate_content=lambda **kw:response)
-        def close(self): captured['closed']=True
-    monkeypatch.setattr(genai,'Client',Client)
-    result=VertexGeminiProvider(Settings(vertex_project='project',vertex_model='test-model-001',model_timeout_seconds=7)).generate('test',{'activities':[]})
-    assert result.model_version=='test-model-001'
-    assert captured['vertexai'] and captured['project']=='project'
-    assert captured['http_options'].timeout==7000
-    assert captured['http_options'].retry_options.attempts==1
-    assert 'api_key' not in captured and captured['closed']
+    class FakeRunner:
+        def __init__(self,**kwargs): captured.update(kwargs)
+        async def run_async(self,**kwargs):
+            if False: yield None
+    monkeypatch.setattr('google.adk.runners.Runner',FakeRunner)
+    provider=VertexADKProvider(Settings(vertex_project='project',vertex_model='test-model-001',model_timeout_seconds=7))
+    provider._get_runner()
+    config=captured['agent'].generate_content_config
+    assert config.http_options.timeout==7000
+    assert config.http_options.retry_options.attempts==1
 
 
 def test_input_budget_and_untrusted_activity_text_cannot_trigger_calendar_writes():

@@ -7,13 +7,25 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _adc_project_id() -> str:
+    """Use the project attached to local ADC when an explicit project is omitted."""
+    try:
+        import google.auth
+        _, project_id = google.auth.default()
+        return project_id or ''
+    except Exception:
+        # Google auth is an optional Vertex extra; deterministic mode must work
+        # without it and must not fail configuration loading.
+        return ''
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="WORKFORCE_", extra="ignore")
 
     reasoning_provider: Literal['deterministic','vertex'] = 'deterministic'
-    vertex_project: str = ''
+    vertex_project: str = Field(default_factory=_adc_project_id)
     vertex_location: str = 'global'
-    vertex_model: str = ''
+    vertex_model: str = 'gemini-3.5-flash-lite'
     model_timeout_seconds: float = Field(default=10, gt=0, le=30)
     model_max_output_tokens: int = Field(default=2048, ge=128, le=8192)
     model_input_usd_per_million: float | None = Field(default=None, ge=0)

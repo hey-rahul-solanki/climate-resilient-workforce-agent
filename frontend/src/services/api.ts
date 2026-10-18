@@ -2,7 +2,7 @@
  * Frontend API service module for communicating with the Python backend.
  *
  * Configured via the `VITE_API_BASE_URL` Vite environment variable.
- * Fallback default is http://localhost:8000.
+ * Fallback default is http://localhost:8010.
  */
 
 import type {
@@ -23,7 +23,7 @@ export function getApiBaseUrl(): string {
   if (typeof envUrl === 'string' && envUrl.trim() !== '') {
     return envUrl.trim().replace(/\/+$/, '');
   }
-  return 'http://localhost:8000';
+  return 'http://localhost:8010';
 }
 
 /**

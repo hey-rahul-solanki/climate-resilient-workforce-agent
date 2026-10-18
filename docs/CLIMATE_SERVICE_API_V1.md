@@ -56,12 +56,12 @@ not provision a service token automatically. With `CLIMATE_SERVICE_TOKEN` set in
 the caller's environment:
 
 ```bash
-curl --fail-with-body http://localhost:8000/api/v1/climate/sessions \
+curl --fail-with-body http://localhost:8010/api/v1/climate/sessions \
   -H "Authorization: Bearer $CLIMATE_SERVICE_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"site_id":"VAD-PLANT-01","date":"2026-10-17"}'
 
-curl --fail-with-body "http://localhost:8000/api/v1/climate/sessions/$SESSION_ID/suggestions" \
+curl --fail-with-body "http://localhost:8010/api/v1/climate/sessions/$SESSION_ID/suggestions" \
   -H "Authorization: Bearer $CLIMATE_SERVICE_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"latest":"12:00"}'

@@ -259,21 +259,21 @@ The multi-container stack can be orchestrated locally and in production via Dock
 graph TD
     subgraph Host_Network ["Host Network"]
         Port5173["Port 5173\n(React Web UI)"]
-        Port8000["Port 8000\n(FastAPI / Swagger Docs)"]
+        Port8010["Port 8010\n(calendar_backend FastAPI / Swagger Docs)"]
         Port5050["Port 5050\n(pgAdmin GUI)"]
         Port5432["Port 5432\n(PostgreSQL Database)"]
     end
 
     subgraph Docker_Compose ["Docker Compose Stack"]
         C_Front["container: frontend\n(Vite Dev / NGINX Production)"]
-        C_API["container: api\n(FastAPI + Uvicorn)"]
+        C_API["container: calendar-backend\n(FastAPI + MCP client + Uvicorn)"]
         C_DB["container: db\n(PostgreSQL 16 Alpine)"]
         C_PGA["container: pgadmin\n(dpage/pgadmin4)"]
         Vol_DB[("Volume: postgres_data")]
     end
 
     Port5173 --> C_Front
-    Port8000 --> C_API
+    Port8010 --> C_API
     Port5050 --> C_PGA
     Port5432 --> C_DB
 
@@ -324,7 +324,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: workforce_api
+    container_name: calendar-backend
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://workforce_user:workforce_secret@db:5432/workforce_db
@@ -332,7 +332,7 @@ services:
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
     ports:
-      - "8000:8000"
+      - "8010:8010"
     depends_on:
       db:
         condition: service_healthy
@@ -344,7 +344,7 @@ services:
     container_name: workforce_frontend
     restart: unless-stopped
     environment:
-      VITE_API_BASE_URL: http://localhost:8000
+      VITE_API_BASE_URL: http://localhost:8010
     ports:
       - "5173:5173"
     depends_on:

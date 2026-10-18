@@ -70,7 +70,7 @@ export const ApiPage: React.FC<ApiPageProps> = ({
             </p>
             <pre className="code-block">
               <code>{`# frontend/.env
-VITE_API_BASE_URL=http://localhost:8000`}</code>
+VITE_API_BASE_URL=http://localhost:8010`}</code>
             </pre>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
               Vite automatically injects variables prefixed with <code>VITE_</code> at build and dev time.

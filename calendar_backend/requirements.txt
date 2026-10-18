@@ -1,0 +1,6 @@
+# Install from the calendar_backend directory with:
+#   python -m pip install -r requirements.txt
+# The project install supplies the shared workforce_agent package and
+# the FastAPI, MCP, and Gemini/Vertex runtime dependencies.
+..[api,mcp,vertex]
+python-dotenv>=1.0

@@ -38,9 +38,11 @@ class Constraints(BaseModel):
 class Suggestion(BaseModel):
     id: str
     activity_id: str
+    suggested_action: Literal['reschedule','request-review'] = 'request-review'
     start: str | None
     end: str | None
-    validation: Literal['demo-validated', 'no-feasible-slot', 'needs-review']
+    candidate_window: TimeWindow | None = None
+    validation: Literal['demo-validated', 'risk-reduced', 'no-feasible-slot', 'needs-review']
     rationale: str
     warning_ids: list[str]
     policy: str
@@ -56,6 +58,7 @@ class Suggestion(BaseModel):
     policy_blocks: list[dict] = Field(default_factory=list)
     policy_context: dict | None = None
     warning_matches: list[WarningMatch] = Field(default_factory=list)
+    requested_constraints: Constraints = Field(default_factory=Constraints)
 
 
     @model_validator(mode='before')
@@ -63,6 +66,7 @@ class Suggestion(BaseModel):
     def legacy_decision_states(cls, value):
         if isinstance(value, dict):
             value = dict(value)
+            value.setdefault('suggested_action', 'reschedule' if value.get('start') and value.get('end') else 'request-review')
             status = value.get('approval', 'pending')
             decision = (value.get('outcome') or {}).get('decision')
             value.setdefault('decision_state', {'approve':'approved','reject':'rejected','revise':'revision-requested'}.get(decision,
@@ -173,7 +177,10 @@ class AgentService:
             raise AgentError(404, 'No fixture for this site')
         with self.lock:
             now = self.clock()
-            self.sessions = {k:v for k,v in self.sessions.items() if v['expires'] > now}
+            expired = [k for k,v in self.sessions.items() if v['expires'] <= now]
+            for key in expired:
+                self.sessions.pop(key, None)
+                self._delete_reasoning_session(key)
             if len(self.sessions) >= 1000:
                 raise AgentError(503, 'Session capacity reached')
             sid = secrets.token_urlsafe(32)
@@ -202,20 +209,63 @@ class AgentService:
                         current_start=a['start'], current_end=a['end'], status=a['status'], reason=a['reason'], warning_matches=a.get('warning_matches',[]),
                         warnings=[w for w in calendar['warnings'] if w['id'] in a['warning_ids']])
                    for a in calendar['activities'] if a['warning_ids'] or a['status'] == 'needs-review']
+        model = session.get('model')
+        if model is None and self.reasoning:
+            model = ModelMeasurement(provider=self.reasoning.provider.name,
+                                     requested_model=self.reasoning.provider.model,
+                                     status='not-called')
         return Reply(session_id=sid, expires_at=session['expires'].isoformat(), message=message,
                      clarification=clarification, constraints=session['constraints'].model_copy(),
                      suggestions=suggestions if suggestions is not None else self.approvals.proposals(sid), context=context,
                      calendar=calendar, audit=self.approvals.audit(sid), monitoring=session['monitoring'],
-                     model=session.get('model'),request_status=session.get('request_status','not-evaluated'),
+                     model=model,request_status=session.get('request_status','not-evaluated'),
                      mode='fixture-data/vertex-reasoning' if self.reasoning else 'deterministic-demo',
                      agent_id='climate-workforce/validated-reasoning-v1' if self.reasoning else AGENT_ID)
+
+    @staticmethod
+    def _supervisor_message(suggestions, activities, timezone):
+        zone = ZoneInfo(timezone)
+        by_id = {activity['id']: activity for activity in activities}
+
+        def clock(value):
+            timestamp = value if isinstance(value, datetime) else datetime.fromisoformat(value)
+            return timestamp.astimezone(zone).strftime('%-I:%M %p')
+
+        lines = []
+        for proposal in suggestions:
+            activity = by_id.get(proposal.activity_id, {})
+            title = activity.get('title', proposal.activity_id)
+            current = proposal.current or activity
+            old_slot = (f"currently scheduled {clock(current['start'])}–{clock(current['end'])}"
+                        if current.get('start') and current.get('end') else 'with no current time available')
+            if proposal.start and proposal.end:
+                new_slot = f"move it to {clock(proposal.start)}–{clock(proposal.end)}"
+                reason = proposal.model_explanation or proposal.rationale
+                state = ('This proposal reduces climate-warning overlap but residual exposure remains; acknowledge it and provide a reason when approving. The calendar has not changed.'
+                         if proposal.validation == 'risk-reduced' else
+                         'This proposal passed deterministic validation and is waiting for your approval; the calendar has not changed.'
+                         if proposal.validation == 'demo-validated' else
+                         'This proposal needs review before it can be approved; the calendar has not changed.')
+                lines.append(f"{title} is {old_slot}. I recommend {new_slot} because {reason} {state}")
+            elif proposal.candidate_window:
+                candidate = proposal.candidate_window
+                labels = {'weather_policy':'climate policy', 'availability':'employee/location availability',
+                          'requested_window':'requested time window', 'duration':'activity duration',
+                          'activity_scope':'activity eligibility'}
+                failed = ', '.join(labels.get(name, name.replace('_',' '))
+                                   for name in proposal.infeasibility_reasons) or 'policy review'
+                lines.append(f"I could not recommend moving {title} to {clock(candidate.start)}–{clock(candidate.end)} because it failed the {failed} check. {proposal.model_explanation or proposal.rationale} The schedule remains unchanged.")
+            else:
+                reason = proposal.rationale or 'No feasible time was found in the requested window.'
+                lines.append(f"I could not find a feasible new time for {title}, {old_slot}. {reason}")
+        return ' '.join(lines) if lines else 'I could not prepare a rescheduling proposal for the requested activity and time window.'
 
     def read(self, sid, principal):
         with self.lock:
             s = self._session(sid, principal)
             return self._reply(sid, s, 'Affected activities and warning/policy references are included in context.')
 
-    def propose(self, sid, principal, constraints: Constraints | None = None):
+    def propose(self, sid, principal, constraints: Constraints | None = None, *, target_ids=None):
         with self.lock:
             s = self._session(sid, principal, 'propose')
             if constraints is not None:
@@ -236,16 +286,29 @@ class AgentService:
                 s['request_status']='needs-review'
                 return self._reply(sid,s,'Forecast or policy is unavailable; no new feasible proposal can be created.',clarification=True,suggestions=[])
             suggestions = [Suggestion.model_validate(item) for item in
-                           validated_suggestions(cal['activities'], forecast, policy, lower, upper)]
+                           validated_suggestions(cal['activities'], forecast, policy, lower, upper,
+                                                 target_ids=set(target_ids) if target_ids is not None else None)]
+            for suggestion in suggestions:
+                suggestion.requested_constraints = c.model_copy()
             saved = self.approvals.save(sid, [item.model_dump(mode='json') for item in suggestions], cal['activities'], principal.subject, self.clock().isoformat())
             suggestions = [Suggestion.model_validate(item) for item in saved]
-            return self._reply(sid, s, 'Prepared proposals only. No calendar times changed.', suggestions=suggestions)
+            s['request_status']='validated'
+            message = self._supervisor_message(suggestions, cal['activities'], cal['site']['timezone'])
+            return self._reply(sid, s, message, suggestions=suggestions)
+
+    def request_proposals(self, sid, principal, constraints: Constraints, *, target_ids=None):
+        """Execute an already-structured MCP action through the authoritative planner."""
+        return self.propose(sid, principal, constraints, target_ids=target_ids)
 
     def chat(self, sid, principal, message):
-        if self.reasoning:
+        # Keep common, unambiguous requests on the deterministic path even when
+        # Gemini is configured. Natural-language interpretation is a fallback
+        # for requests the small deterministic grammar cannot safely handle.
+        if self.reasoning and not self._handles_deterministically(message):
             return self._reasoned_chat(sid,principal,message)
         with self.lock:
             s = self._session(sid, principal)
+            s['model'] = None
             text = message.strip().lower()
             # Deliberately narrow grammar: unrecognized constraints never silently disappear.
             if re.fullmatch(r'(who is affected\??|who is affected today\??|list affected activities|why\??|show warnings)', text):
@@ -258,10 +321,31 @@ class AgentService:
                 return self.propose(sid, principal, c)
             return self._reply(sid, s, 'Please clarify. I support “who is affected”, “reschedule before 12:00”, “after 08:00”, and “reschedule”. Use the time-window fields for combined constraints. Other constraints need a connected reasoning agent.', clarification=True)
 
+    @staticmethod
+    def _handles_deterministically(message):
+        text = message.strip().lower()
+        return bool(
+            re.fullmatch(r'(who is affected\??|who is affected today\??|list affected activities|why\??|show warnings)', text)
+            or re.fullmatch(r'(reschedule|propose|suggestions|show suggestions)', text)
+            or re.fullmatch(r'(?:reschedule |move |propose )?(before|after) ((?:[01]\d|2[0-3]):[0-5]\d)', text)
+        )
+
     def close(self, sid, principal):
         with self.lock:
             self._session(sid, principal)
             del self.sessions[sid]
+            self._delete_reasoning_session(sid)
+
+    def _delete_reasoning_session(self, sid):
+        provider = getattr(self.reasoning, 'provider', None)
+        delete = getattr(provider, 'delete_session', None)
+        if delete:
+            try:
+                delete(sid)
+            except Exception:
+                # Backend expiry is authoritative; failed ADK cleanup is not
+                # allowed to change authorization or session behavior.
+                pass
 
 
     def _calendar(self, sid, session):
@@ -295,7 +379,15 @@ class AgentService:
                 from workforce_agent.policy_windows import evaluate_proposed_window
                 policy_validation=evaluate_proposed_window(candidate,forecast,policy,activities=cal['activities'],
                     now=forecast.issued_at if forecast else self.clock())
-                checks['weather_policy'] = policy_validation.status == 'valid' and proposal['policy'] == f'{policy.policy_id} v{policy.version}'
+                from workforce_agent.suggestion_service import warning_overlap_minutes
+                current_overlap=warning_overlap_minutes(current)
+                candidate_analysis=analyze_calendar([candidate]+[a for a in cal['activities'] if a['id']!=current['id']],forecast,policy,
+                    now=forecast.issued_at if forecast else self.clock())['activities'][0]
+                candidate_overlap=warning_overlap_minutes(candidate_analysis)
+                hard_blocks=[b for b in candidate_analysis.get('policy_blocks',[]) if b.get('code')!='climate-warning']
+                climate_ok=(policy_validation.status=='valid' or
+                    (candidate_analysis['status']=='affected' and candidate_overlap<current_overlap and not hard_blocks))
+                checks['weather_policy'] = climate_ok and proposal['policy'] == f'{policy.policy_id} v{policy.version}'
                 checks['duration'] = end-start == datetime.fromisoformat(proposal['current']['end'])-datetime.fromisoformat(proposal['current']['start'])
                 conflicts = [dict(activity_id=a['id'],title=a['title'],employee_id=a['employee_id']) for a in cal['activities']
                     if a['id'] != current['id'] and (a['employee_id'] == current['employee_id'] or a['location'] == current['location'])
@@ -314,6 +406,8 @@ class AgentService:
             s = self._session(sid,principal,'approve')
             review = self.review(sid,principal,pid)
             proposal = review['proposal']
+            if decision == 'approve' and proposal.get('validation') == 'risk-reduced' and not reason.strip():
+                raise AgentError(422, 'A supervisor reason is required when residual climate-warning overlap remains')
             if proposal.get('outcome'):
                 if proposal['outcome']['decision'] != decision:
                     raise AgentError(409,'Proposal already decided; request a new proposal')
@@ -365,6 +459,7 @@ class AgentService:
             now=self.clock()
             for expired in [sid for sid,s in self.sessions.items() if s['expires']<=now]:
                 del self.sessions[expired]
+                self._delete_reasoning_session(expired)
             for sid,session in self.sessions.items():
                 if session['expires'] > self.clock() and session['monitoring']['enabled']:
                     try:
@@ -378,9 +473,15 @@ class AgentService:
         with self.lock:
             s=self._session(sid,principal)
             cal=self._calendar(sid,s)
-            context=dict(date=cal['date'],timezone=cal['site']['timezone'],window=cal['window'],
+            forecast,policy=self._inputs(s)
+            context=dict(agent_session_id=sid,date=cal['date'],site=cal['site'],timezone=cal['site']['timezone'],window=cal['window'],
+                weather=cal.get('weather'),
+                forecast=forecast.model_dump(mode='json') if forecast else None,
+                policy=policy.model_dump(mode='json') if policy else None,
                 constraints=s['constraints'].model_dump(),
-                activities=[{key:a.get(key) for key in ('id','employee_id','kind','location','start','end','status','warning_ids')} for a in cal['activities']],
+                activities=[{key:a.get(key) for key in (
+                    'id','title','employee_id','kind','location','start','end','status','warning_ids',
+                    'reason','policy_context','policy_blocks')} for a in cal['activities']],
                 warnings=cal['warnings'])
         outcome=self.reasoning.interpret(message,context)
         with self.lock:
@@ -391,7 +492,15 @@ class AgentService:
                 return self._reply(sid,s,'Session constraints changed during inference; retry with current context.',clarification=True,suggestions=[])
             if outcome.status!='ready':
                 s['request_status']='clarification' if outcome.status=='clarification' else 'needs-review'
-                return self._reply(sid,s,'Request needs review or clarification. No new feasible proposal was created. '+outcome.code,clarification=True,suggestions=[])
+                if outcome.status=='clarification' and outcome.plan:
+                    detail = (', '.join(outcome.plan.unsupported_constraints)
+                              if outcome.plan.unsupported_constraints else outcome.plan.explanation)
+                    message = f'Please clarify before I prepare a proposal: {detail}'
+                elif outcome.status=='declined':
+                    message = 'I cannot help with requests to bypass policy or approval, or disclose sensitive information.'
+                else:
+                    message = 'I could not interpret this request reliably. Please restate the activity and requested site-local time window. No new proposal was created.'
+                return self._reply(sid,s,message,clarification=True,suggestions=[])
             plan=outcome.plan
             if plan.action=='list_affected':
                 s['request_status']='not-evaluated'
@@ -407,16 +516,29 @@ class AgentService:
             forecast,policy=self._inputs(s)
             if not plan.candidates:
                 if plan.activity_ids:
-                    s['request_status']='clarification'
-                    return self._reply(sid,s,'Activity-specific requests need explicit candidate times; clarify the scope/window.',clarification=True,suggestions=[])
+                    allowed={a['id'] for a in cal['activities']
+                             if a['kind']=='outdoor' and a['warning_ids'] and a['status']!='needs-review'}
+                    if not set(plan.activity_ids).issubset(allowed):
+                        s['request_status']='needs-review'
+                        return self._reply(sid,s,'The requested activity scope is not eligible for deterministic rescheduling; review the affected activity context.',clarification=True,suggestions=[])
+                    result=self.propose(sid,principal,constraints,target_ids=plan.activity_ids)
+                    s['request_status']='needs-review' if result.request_status=='needs-review' else 'validated' if not result.clarification else 'clarification'
+                    return self._reply(sid,s,'Gemini interpreted the request; deterministic planner generated the proposals. '+result.message,
+                                       clarification=result.clarification,suggestions=result.suggestions)
                 reply=self.propose(sid,principal,constraints)
                 s['request_status']='needs-review' if reply.request_status=='needs-review' else 'validated' if not reply.clarification else 'clarification'
-                return self._reply(sid,s,reply.message,clarification=reply.clarification,suggestions=reply.suggestions)
+                return self._reply(sid,s,'Gemini interpreted the request; deterministic planner generated the proposals. '+reply.message,
+                                   clarification=reply.clarification,suggestions=reply.suggestions)
             results=validate_model_candidates(plan,cal,forecast,policy,constraints,evaluation_time=forecast.issued_at if forecast else self.clock())
             s['constraints']=constraints
+            for result in results:
+                result['requested_constraints'] = constraints.model_dump()
             saved=self.approvals.save(sid,results,cal['activities'],principal.subject,self.clock().isoformat())
-            s['request_status']='validated' if all(r['validation']=='demo-validated' for r in results) else 'needs-review'
-            return self._reply(sid,s,'Model candidates were checked by deterministic code. Review validation failures; no calendar times changed.',suggestions=[Suggestion.model_validate(r) for r in saved])
+            s['request_status']='validated' if all(r['validation'] in ('demo-validated','risk-reduced') for r in results) else 'needs-review'
+            saved_suggestions = [Suggestion.model_validate(r) for r in saved]
+            message = 'I used the AI’s scheduling suggestions and checked them against the schedule and policy. ' + self._supervisor_message(
+                saved_suggestions, cal['activities'], cal['site']['timezone'])
+            return self._reply(sid,s,message,suggestions=saved_suggestions)
 
 
     def annotate_activity(self, sid, principal, activity_id):

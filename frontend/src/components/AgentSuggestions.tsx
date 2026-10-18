@@ -38,7 +38,8 @@ export function AgentSuggestions(props: Props) {
         {s.approval==='superseded' && <p>Superseded · request a current proposal</p>}
         <h4>{activity?.title ?? s.activity_id}</h4><small>{props.employees.find(e=>e.id===activity?.employee_id)?.name ?? 'Employee unavailable'}</small>
         <p>Current at proposal: {s.current ? range(s.current.start,s.current.end) : activity ? range(activity.start,activity.end) : 'Unavailable'}</p>
-        <p className="new-time">{s.start && s.end ? `Proposed: ${range(s.start,s.end)}` : s.validation==='no-feasible-slot' ? 'No feasible alternative' : 'No proposed time — needs review'}</p>
+        <p className="new-time">{s.start && s.end ? `Proposed: ${range(s.start,s.end)}` : s.candidate_window ? `Requested candidate (not validated): ${range(s.candidate_window.start,s.candidate_window.end)}` : s.validation==='no-feasible-slot' ? 'No feasible alternative' : 'No proposed time — needs review'}</p>
+        {s.infeasibility_reasons?.length ? <p>Failed checks: {s.infeasibility_reasons.map(reason=>reason.replaceAll('_',' ')).join(', ')}</p> : null}
         <p>{s.rationale}</p>
         <details className="suggestion-evidence"><summary>Policy, validation & warning evidence</summary>
         {s.policy && <p>Policy: {s.policy}</p>}

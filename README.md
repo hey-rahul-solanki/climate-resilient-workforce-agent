@@ -6,7 +6,7 @@ The first milestone is the planning data contract and weather ingestion. Locatio
 
 A companion modern React + Vite frontend is located in `frontend/` to monitor sites, inspect weather ingestion parameters, and visualize schedule safety policies.
 
-Custom scheduling integrations can use the [versioned climate suggestion API](docs/CLIMATE_SERVICE_API_V1.md) without an MCP client.
+Agent integrations use MCP through the `/agent` gateway; the duplicate agent REST adapters are no longer exposed.
 
 ---
 
@@ -57,33 +57,45 @@ Add another geography by placing a JSON file next to `src/workforce_agent/locati
 
 ### 4. Starting the FastAPI Backend Server
 
-Install the API dependencies (FastAPI and Uvicorn):
+Install the unified FastAPI, MCP, and Gemini runtime:
 
 ```bash
-pip install -e ".[dev,api]"
+pip install -e ".[dev,api,mcp,vertex]"
 ```
 
 Start the FastAPI server:
 
 ```bash
 # Option 1: Using uvicorn with live auto-reload
-uvicorn workforce_agent.api:app --host 0.0.0.0 --port 8000 --reload
+uvicorn calendar_backend.main:app --host 0.0.0.0 --port 8010 --reload --env-file calendar_backend/.env
 
 # Option 2: Using the CLI entrypoint
-workforce-api
-
-# Option 3: Running the Python module directly
-python -m workforce_agent.api
+calendar-backend
 ```
 
 Once started:
-- **API Base URL**: [http://localhost:8000](http://localhost:8000)
-- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
-- **Sites API**: [http://localhost:8000/api/sites](http://localhost:8000/api/sites)
-- **Weather API**: [http://localhost:8000/api/weather/VAD-PLANT-01?forecast_days=3](http://localhost:8000/api/weather/VAD-PLANT-01?forecast_days=3)
+- **API Base URL**: [http://localhost:8010](http://localhost:8010)
+- **Interactive Swagger Docs**: [http://localhost:8010/docs](http://localhost:8010/docs)
+- **Health Check**: [http://localhost:8010/health](http://localhost:8010/health)
+- **Sites API**: [http://localhost:8010/api/sites](http://localhost:8010/api/sites)
+- **Weather API**: [http://localhost:8010/api/weather/VAD-PLANT-01?forecast_days=3](http://localhost:8010/api/weather/VAD-PLANT-01?forecast_days=3)
 
 CORS is enabled by default to allow communication with the frontend development server at [http://localhost:5173](http://localhost:5173).
+
+### Frontend agent gateway
+
+The root-level `calendar_backend` serves both the existing `/api` routes and the
+frontend's MCP tool gateway:
+
+```bash
+pip install -e ".[api,mcp,vertex]"
+WORKFORCE_AGENT_DEMO_ENABLED=true WORKFORCE_AGENT_SECURE_COOKIES=false uvicorn calendar_backend.main:app --host 0.0.0.0 --port 8010 --reload
+```
+
+`GET /agent` returns the connected MCP tool schemas and `POST /agent` invokes a
+discovered tool using `{ "name": "tool_name", "arguments": { ... } }`. The
+gateway keeps one MCP connection alive so follow-up calls use the same session.
+Catalog, weather, schedule, calendar and planning routes use this same service.
 
 ### 5. Running Python Tests
 
@@ -128,7 +140,7 @@ Default configuration in `frontend/.env`:
 
 ```env
 # URL where your Python API server will run
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8010
 ```
 
 You can change this URL to any running backend host or port.
@@ -201,9 +213,9 @@ docker compose up --build
 
 Once running:
 - **Frontend Web UI**: [http://localhost:5173](http://localhost:5173)
-- **FastAPI Backend Base**: [http://localhost:8000](http://localhost:8000)
-- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Backend Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
+- **FastAPI Backend Base**: [http://localhost:8010](http://localhost:8010)
+- **Interactive Swagger Docs**: [http://localhost:8010/docs](http://localhost:8010/docs)
+- **Backend Health Check**: [http://localhost:8010/health](http://localhost:8010/health)
 
 To run in the background (detached mode):
 
@@ -237,8 +249,8 @@ docker compose --profile db up --build
 
 **Backend Image**:
 ```bash
-docker build -t workforce-backend -f Dockerfile .
-docker run -p 8000:8000 workforce-backend
+docker build -t calendar-backend -f Dockerfile .
+docker run -p 8010:8010 calendar-backend
 ```
 
 **Frontend Image**:

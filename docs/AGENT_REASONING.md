@@ -3,11 +3,18 @@
 ## Implemented vs connected
 
 The default remains the credential-free deterministic agent and fixture calendar.
-An optional `VertexGeminiProvider` now implements server-side Gemini calls on Vertex
-AI using the Google Gen AI SDK and Application Default Credentials (ADC). It is
-implemented and tested with injected SDK/provider responses, **not verified against
-a live project/model here**. No model or project is enabled by default. Selecting
-Vertex without configuration, SDK, permissions or a valid response fails closed.
+An optional `VertexADKProvider` runs a Google ADK `Agent` through an ADK `Runner`,
+using Gemini on Vertex AI with Application Default Credentials (ADC). The backend's
+opaque session ID is also the ADK in-memory session key and is deleted when the
+backend session expires or closes. The backend remains the source of truth for its
+30-minute expiry, schedule, permissions, constraints, proposals, and approvals. A
+live ADK-to-Vertex smoke call was verified in project `climate-workforce-agent` using
+`gemini-3.5-flash-lite`. Credentials and project configuration remain local and are
+not stored in the repository. Runtime settings keep the provider deterministic by
+default, so no model calls happen until `WORKFORCE_REASONING_PROVIDER=vertex` is set.
+The project is read from ADC when available (or can be overridden), and the tested
+model is the default Vertex model setting. Missing SDK, permissions, or valid output
+fails closed.
 
 `ReasoningProvider` is the injectable boundary. `ReasoningService` schema-validates
 untrusted intent/candidates. `validate_model_candidates` is the reusable deterministic
@@ -17,6 +24,13 @@ never receives provider credentials or calls Gemini. Existing tool discovery now
 exposes typed affected activity evidence, suggestion validation checks/infeasibility
 reasons, and provider measurements through `Reply`.
 
+The MCP `climate_agent` tool remains the client-facing entry point. `AgentService`
+routes clear supported phrases deterministically and invokes the ADK interpreter for
+other language; it then applies the interpreted intent through the existing authorized
+deterministic methods. This ADK agent does not call back into the same MCP server.
+Adding ADK MCP tool calls would require a separate non-recursive tool endpoint and
+delegated identity design; do not expose `climate_agent` to itself as an ADK tool.
+
 ## Request and candidate flow
 
 1. Authenticate/site-authorize before accessing the calendar context. Snapshot the
@@ -24,15 +38,16 @@ reasons, and provider measurements through `Reply`.
    inference. Send only IDs, pseudonymous employee IDs, site-local times, kinds,
    locations, warning/policy context and retained constraints. Do not send employee
    names, event notes, full transcripts, identity tokens or credentials.
-2. Ask Gemini for JSON conforming to `ModelPlan`: action (`list_affected`, `propose`,
+2. Ask the ADK `LlmAgent` for JSON conforming to `ModelPlan`: action (`list_affected`, `propose`,
    `clarify`, `decline`), earliest/latest bounds, activity IDs, optional explicit
-   candidate windows/explanations and unsupported constraints. The SDK requests
-   structured JSON; Pydantic independently rejects missing/extra fields, invented
+   candidate windows/explanations and unsupported constraints. ADK requests
+   structured JSON using Vertex's supported schema subset; Pydantic independently
+   rejects missing/extra fields, invented
    IDs, duplicate candidate IDs, invalid enums and naive/reversed intervals.
-3. Ambiguous/unsupported constraints return clarification. A scoped request without
-   explicit candidate times asks for clarification rather than silently rescheduling
-   other activities. A valid all-affected time-window request can use the existing
-   deterministic bounded planner if Gemini supplies no candidate windows.
+3. Ambiguous/unsupported constraints return clarification. A request with a clear
+   time window but no explicit candidate timestamps uses the deterministic bounded
+   planner. When Gemini identifies a specific eligible activity scope, planning is
+   restricted to that scope; unrelated activities are not added silently.
 4. Explicit candidates are checked against fresh application state: affected outdoor
    scope, original duration, retained/requested site-local window, policy/forecast
    result and employee/location conflicts. Candidates accepted earlier in the same
@@ -73,25 +88,26 @@ safety integration is implied by enabling a reasoning provider.
 
 ## Configuration and model/version policy
 
-Install `pip install '.[api,vertex]'`. The optional SDK constraint is
-`google-genai>=2.31,<3`; adapter tests here used SDK 2.31.0. For deployment, lock the
-resolved package version. Environment variables:
+Install `pip install '.[api,vertex]'`. The optional ADK constraint is
+`google-adk>=1.39,<2`; ADK 1.39.1 was used for local validation. For deployment,
+lock the resolved package version. Environment variables:
 
 | Variable | Default / meaning |
 | --- | --- |
 | `WORKFORCE_REASONING_PROVIDER` | `deterministic`; opt in with `vertex` |
-| `WORKFORCE_VERTEX_PROJECT` | unset; required for Vertex |
+| `WORKFORCE_VERTEX_PROJECT` | ADC project by default; set explicitly to override |
 | `WORKFORCE_VERTEX_LOCATION` | `global`; select a supported approved location |
-| `WORKFORCE_VERTEX_MODEL` | unset; required model ID/version chosen by operator |
+| `WORKFORCE_VERTEX_MODEL` | `gemini-3.5-flash-lite`; override to choose another available model/version |
 | `WORKFORCE_MODEL_TIMEOUT_SECONDS` | 10; SDK HTTP deadline, maximum 30 |
 | `WORKFORCE_MODEL_MAX_OUTPUT_TOKENS` | 2048; configurable 128–8192 |
 | `WORKFORCE_MODEL_INPUT_USD_PER_MILLION` | unset; optional operator-supplied rate |
 | `WORKFORCE_MODEL_OUTPUT_USD_PER_MILLION` | unset; optional operator-supplied rate |
 
-There is deliberately no assumed/default live model name. Configure a currently
-available, region-compatible approved Gemini model/version in the project; use a
-pinned/versioned resource when supported. Record both the configured model ID and
-provider-returned `model_version` for each call. Evaluation stubs use explicit
+The configured development default is `gemini-3.5-flash-lite`; it is only called when
+Vertex reasoning is explicitly enabled. Operators can select another currently
+available, region-compatible approved Gemini model/version; use a pinned/versioned
+resource when supported. Record both the configured model ID and provider-returned
+`model_version` for each call. Evaluation stubs use explicit
 `fixture-model-v1` / `fixture-model-001`, never a claim of live Gemini execution.
 
 On GCP use a dedicated least-privilege workload service account/ADC with Vertex
@@ -150,19 +166,18 @@ never fabricated zero cost. Validate rates against current project pricing.
 
 ## Agent Engine/runtime assessment
 
-The current FastAPI/container workflow is compatible with a provider-backed service
-host, but is not an Agent Engine-deployed agent. A migration would need an ADK or
-supported callable wrapper, verified end-user/workload identity propagation, shared
-TTL session storage, distributed approval locking/audit, and an independently
-scheduled monitoring worker. The current in-process session dictionary/SQLite lock
-and FastAPI lifespan task must not be assumed to scale unchanged in a managed
-runtime. For this MVP, retain the existing container deployment; do not provision
-Agent Engine merely to run one structured inference call. Reevaluate when managed
-sessions/framework integration justify those changes.
+The current FastAPI/container workflow runs an ADK agent locally/in-process and is
+not an Agent Engine-deployed agent. ADK's in-memory conversation events are scoped to
+the backend session ID and removed when its 30-minute lifetime ends. Agent Engine
+deployment and managed sessions are not configured; that requires a deployed agent
+resource and a verified mapping from the authenticated principal to Google `user_id`.
+Managed conversation events must not replace schedule, proposal, audit, or
+authorization data.
 
-Google's [structured output documentation](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/multimodal/control-generated-output)
-and [Gen AI SDK reference](https://googleapis.github.io/python-genai/genai.html)
-support the adapter approach. See [Agent Engine/runtime](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/overview)
+Google's [ADK documentation](https://google.github.io/adk-docs/),
+[ADK MCP integration](https://google.github.io/adk-docs/tools/mcp-tools/), and
+[structured output documentation](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/multimodal/control-generated-output)
+support this approach. See [Agent Engine/runtime](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/overview)
 and [Cloud Run agent hosting](https://docs.cloud.google.com/run/docs/ai-agents) for
 hosting options; none is evidence of a deployed integration in this repository.
 

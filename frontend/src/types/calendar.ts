@@ -37,10 +37,14 @@ export interface CalendarWarning {
 export interface CalendarSuggestion {
   id: string;
   activity_id: string;
+  suggested_action?: 'reschedule' | 'request-review';
   start: string | null;
   end: string | null;
+  candidate_window?: {start: string; end: string} | null;
   validation: string;
   rationale: string;
+  requested_constraints?: {earliest: string | null; latest: string | null};
+  infeasibility_reasons?: string[];
   warning_ids?: string[];
   policy?: string;
   approval?: string;
