@@ -3,18 +3,19 @@
 ## Implemented
 
 The calendar panel calls the root-level `calendar_backend` service through same-origin
-`/agent` requests. That service discovers MCP tool schemas and invokes the requested
-tool; the MCP server calls the shared agent service. Docker enables an **isolated demo
-identity**, not an enterprise login.
+`/agent` requests. The backend runs a Google ADK Gemini agent for supervisor chat. Its
+tools are built from schemas discovered from the MCP server, and tool invocations go
+through the authenticated MCP connection to the shared scheduling service. Structured
+controls such as review, approval, and proposal-window submission still call their
+specific MCP tools directly. Docker enables an **isolated demo identity**, not an
+enterprise login.
 Click **Start isolated demo session**. Ask `who is affected`, `reschedule before
 12:00`, `after 08:00`, or `reschedule`. Combined earliest/latest constraints can be
 submitted through the form. Unrecognized or ambiguous requests ask clarification;
 they are never treated as successfully understood natural-language constraints.
 
-The default deterministic agent identity is `climate-workforce/deterministic-v1`.
-`AgentService` is reusable Python application logic. The unified `calendar_backend`
-serves HTTP routes and acts as an MCP client gateway for browser agent calls. The stdio
-MCP server calls the shared service directly. Proposal generation is not approval. It exposes
+`AgentService` is reusable Python application logic. The stdio MCP server calls the
+shared service directly. Proposal generation is not approval. It exposes
 fresh proposal review and explicit approval-gated updates to the isolated demo calendar.
 See [the approval workflow](RESCHEDULING_APPROVAL.md). External calendar integration
 remains unconnected.
@@ -29,11 +30,13 @@ policy version, original times and validation rationale accompany each proposal.
 
 ## Agent transport
 
-The agent is exposed to the frontend through the MCP gateway only. `GET /agent`
-discovers MCP tool schemas, and `POST /agent` invokes a discovered tool with
-`{name, arguments}`. The legacy `/api/agent/*` and `/api/v1/climate/*` REST adapters
-are not registered by `calendar_backend`; agent requests use MCP instead. Other
-calendar, weather, catalog, safety and planning HTTP routes remain under `/api`.
+`GET /agent` discovers MCP tool schemas. `POST /agent` routes supervisor chat through
+the ADK agent, which selects read/proposal MCP tools from the discovered catalog;
+other `{name, arguments}` requests invoke their selected MCP tool directly. The legacy
+`/api/agent/*` and `/api/v1/climate/*` REST adapters are not registered by
+`calendar_backend`; conversational interpretation lives in the FastAPI backend, while
+the MCP server owns scheduling operations and validation. Other calendar, weather,
+catalog, safety and planning HTTP routes remain under `/api`.
 
 The local demo identity is enabled explicitly. The gateway login sets an HttpOnly,
 SameSite=strict cookie. Use HTTPS beyond local development.
@@ -71,10 +74,11 @@ conversation log, backend-pending and clarification status, and retryable errors
 Proposals display current/proposed times, rationale and validation; selecting one
 highlights its event and opens review. Only backend-confirmed outcomes report an
 update. The frontend sends no user ID or service credential: application auth uses
-the server-issued HttpOnly session cookie. Fixture mode supports the documented
-time-window grammar; prompts such as “keep this crew together” request clarification
-unless a configured reasoning provider can interpret them. Crew grouping is not
-silently asserted or enforced by the demo planner.
+the server-issued HttpOnly session cookie. Supervisor chat uses the configured Vertex
+Gemini ADK agent to interpret natural language and call MCP schedule/proposal tools. If
+model access is unavailable, the request returns an error instead of silently falling
+back to a separate chat parser. MCP validation and approval gates remain authoritative.
+Crew grouping is not silently asserted or enforced by the demo planner.
 
 Demo login is disabled by default. Docker explicitly sets
 `WORKFORCE_AGENT_DEMO_ENABLED=true` and `WORKFORCE_AGENT_SECURE_COOKIES=false` for

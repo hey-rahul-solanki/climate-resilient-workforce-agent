@@ -209,13 +209,18 @@ class AgentService:
                         current_start=a['start'], current_end=a['end'], status=a['status'], reason=a['reason'], warning_matches=a.get('warning_matches',[]),
                         warnings=[w for w in calendar['warnings'] if w['id'] in a['warning_ids']])
                    for a in calendar['activities'] if a['warning_ids'] or a['status'] == 'needs-review']
+        model = session.get('model')
+        if model is None and self.reasoning:
+            model = ModelMeasurement(provider=self.reasoning.provider.name,
+                                     requested_model=self.reasoning.provider.model,
+                                     status='not-called')
         return Reply(session_id=sid, expires_at=session['expires'].isoformat(), message=message,
                      clarification=clarification, constraints=session['constraints'].model_copy(),
                      suggestions=suggestions if suggestions is not None else self.approvals.proposals(sid), context=context,
                      calendar=calendar, audit=self.approvals.audit(sid), monitoring=session['monitoring'],
-                     model=session.get('model'),request_status=session.get('request_status','not-evaluated'),
-                     mode='fixture-data/vertex-reasoning' if session.get('model') else 'deterministic-demo',
-                     agent_id='climate-workforce/validated-reasoning-v1' if session.get('model') else AGENT_ID)
+                     model=model,request_status=session.get('request_status','not-evaluated'),
+                     mode='fixture-data/vertex-reasoning' if self.reasoning else 'deterministic-demo',
+                     agent_id='climate-workforce/validated-reasoning-v1' if self.reasoning else AGENT_ID)
 
     @staticmethod
     def _supervisor_message(suggestions, activities, timezone):
@@ -292,44 +297,8 @@ class AgentService:
             return self._reply(sid, s, message, suggestions=suggestions)
 
     def request_proposals(self, sid, principal, constraints: Constraints, *, target_ids=None):
-        """Interpret a proposal request with the configured model, then validate it."""
-        if not self.reasoning:
-            return self.propose(sid, principal, constraints, target_ids=target_ids)
-        with self.lock:
-            s = self._session(sid, principal, 'propose')
-            cal = self._calendar(sid, s)
-            activities = {activity['id']: activity for activity in cal['activities']}
-            targets = [activities.get(activity_id) for activity_id in (target_ids or [])]
-            targets = [activity for activity in targets if activity]
-            bounds = []
-            if constraints.earliest:
-                bounds.append(f"not earlier than {constraints.earliest}")
-            if constraints.latest:
-                bounds.append(f"ending by {constraints.latest}")
-            scope = (f"the activity titled {targets[0].get('title', targets[0]['id'])} "
-                     f"(activity ID {targets[0]['id']})" if targets else 'all eligible affected activities')
-            window = ' and '.join(bounds) if bounds else 'the retained session time window'
-            message = f"Prepare validated rescheduling proposals for {scope}, {window}."
-        interpreted = self._reasoned_chat(sid, principal, message)
-        # The UI has already supplied an explicit activity ID and validated
-        # site-local bounds. If model interpretation fails or returns unusable
-        # candidates, keep this structured action usable through the same
-        # deterministic planner and policy checks. Free-text chat still fails
-        # closed when reasoning is unavailable.
-        model_status = interpreted.model.status if interpreted.model else None
-        unusable_candidates = bool(interpreted.suggestions) and all(
-            suggestion.validation == 'needs-review' and suggestion.start is None
-            for suggestion in interpreted.suggestions)
-        fallback = (interpreted.clarification or interpreted.request_status == 'not-evaluated'
-                    or model_status in ('provider-error', 'invalid-output', 'needs-review')
-                    or unusable_candidates)
-        if not fallback or 'constraints changed during inference' in interpreted.message.lower():
-            return interpreted
-        deterministic = self.propose(sid, principal, constraints, target_ids=target_ids)
-        deterministic.message = ('The AI could not provide a usable schedule plan, so I used the deterministic planner and checked the result. '
-                                 + self._supervisor_message(deterministic.suggestions,
-                                     deterministic.calendar['activities'], deterministic.calendar['site']['timezone']))
-        return deterministic
+        """Execute an already-structured MCP action through the authoritative planner."""
+        return self.propose(sid, principal, constraints, target_ids=target_ids)
 
     def chat(self, sid, principal, message):
         # Keep common, unambiguous requests on the deterministic path even when
