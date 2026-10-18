@@ -18,8 +18,8 @@ COPY tsconfig*.json vite.config.ts index.html ./
 COPY public/ ./public/
 COPY src/ ./src/
 
-# Build argument for the backend API URL (defaults to http://localhost:8000)
-ARG VITE_API_BASE_URL=http://localhost:8000
+# Build argument for the backend API URL (defaults to http://localhost:8010)
+ARG VITE_API_BASE_URL=http://localhost:8010
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Build production assets

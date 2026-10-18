@@ -3,17 +3,12 @@
 # Run with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 # ==============================================================================
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: ["uvicorn", "workforce_agent.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+  calendar-backend:
+    command: ["uvicorn", "calendar_backend.main:app", "--host", "0.0.0.0", "--port", "8010", "--reload"]
     volumes:
+      - ./calendar_backend:/app/calendar_backend
       - ./src:/app/src
       - ./tests:/app/tests
-    environment:
-      - PYTHONUNBUFFERED=1
-      - WORKFORCE_WEATHER_SOURCE=open-meteo
 
   frontend:
     build:
@@ -27,4 +22,5 @@ services:
       - ./frontend/index.html:/app/index.html
       - /app/node_modules
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_API_BASE_URL=http://localhost:8010
+      - AGENT_PROXY_TARGET=http://calendar-backend:8010

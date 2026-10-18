@@ -41,35 +41,35 @@ Always ensure your virtual environment is activated (`source .venv/bin/activate`
 
 ### Recommended: Using Uvicorn with Auto-Reload
 ```bash
-uvicorn workforce_agent.api:app --host 0.0.0.0 --port 8000 --reload
+uvicorn calendar_backend.main:app --host 0.0.0.0 --port 8010 --reload
 ```
 
 ### Alternative: Using the CLI Entrypoint
 ```bash
-workforce-api
+calendar-backend
 ```
 
 ### Alternative: Running as a Python Module
 ```bash
-python -m workforce_agent.api
+python -m calendar_backend.main
 ```
 
 ### Alternative: Using `uv run` directly
 ```bash
-uv run uvicorn workforce_agent.api:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn calendar_backend.main:app --host 0.0.0.0 --port 8010 --reload
 ```
 
 > [!WARNING]
 > **Common Error:** Do not run `python3 -m api.py` or `python3 api.py`. 
 > - Python `-m` expects a module dot-path, not a filename with `.py`.
-> - The package module is located at `workforce_agent.api`.
+> - The FastAPI service is located at `calendar_backend.main`.
 > - Always run with the virtual environment active so `fastapi` and `uvicorn` are resolved.
 
 Once running:
-- **API Base URL**: [http://localhost:8000](http://localhost:8000)
-- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Alternative ReDoc UI**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
+- **API Base URL**: [http://localhost:8010](http://localhost:8010)
+- **Interactive Swagger Docs**: [http://localhost:8010/docs](http://localhost:8010/docs)
+- **Alternative ReDoc UI**: [http://localhost:8010/redoc](http://localhost:8010/redoc)
+- **Health Check**: [http://localhost:8010/health](http://localhost:8010/health)
 
 ---
 
@@ -93,13 +93,13 @@ Planning cycle baselines are stored in SQLite at `WORKFORCE_PLANNING_CYCLES_DB_P
 
 ```bash
 # Health check
-curl http://localhost:8000/health
+curl http://localhost:8010/health
 
 # List registered industrial sites
-curl http://localhost:8000/api/sites
+curl http://localhost:8010/api/sites
 
 # Fetch 3-day weather forecast for Vadodara Plant 01
-curl "http://localhost:8000/api/weather/VAD-PLANT-01?forecast_days=3"
+curl "http://localhost:8010/api/weather/VAD-PLANT-01?forecast_days=3"
 ```
 
 ---

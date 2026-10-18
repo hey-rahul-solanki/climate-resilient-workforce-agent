@@ -34,10 +34,9 @@ principals receive these permissions; external bearer principals must be provisi
 explicitly. Creating proposals or reading suggestions cannot change event times.
 MCP tools continue to expose only reads/proposals/chat, never approval or writes.
 
-| Endpoint | Body/result |
-| --- | --- |
-| GET `/api/agent/sessions/{sid}/proposals/{pid}/review` | immutable proposal snapshot, latest current event, employees, checks, conflicts, climate evidence |
-| POST `/api/agent/sessions/{sid}/proposals/{pid}/decision` | `{decision: "approve" | "reject" | "revise", reason?: string}`; returns session/calendar/proposals/audit |
+Supervisor review and decisions are performed through the application UI. The old
+`/api/agent/*` REST endpoints are no longer registered; agent operations are routed
+through the MCP gateway.
 
 Clients submit a proposal ID and decision, not replacement timestamps. Unknown
 fields are rejected. The immutable snapshot includes source version, original

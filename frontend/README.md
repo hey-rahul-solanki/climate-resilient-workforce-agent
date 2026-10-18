@@ -19,7 +19,7 @@ Copy the example environment configuration:
 cp .env.example .env
 ```
 
-By default, `VITE_API_BASE_URL` is set to `http://localhost:8000`. You can change this to point to your Python backend server.
+By default, `VITE_API_BASE_URL` is set to `http://localhost:8010`. You can change this to point to your Python backend server.
 
 ### 3. Start Development Server
 
@@ -103,9 +103,9 @@ To run the backend server alongside the frontend, run from the repository root:
 
 ```bash
 # In the root repository directory (with virtual environment active):
-uvicorn workforce_agent.api:app --host 0.0.0.0 --port 8000 --reload
+uvicorn calendar_backend.main:app --host 0.0.0.0 --port 8010 --reload --env-file calendar_backend/.env
 # Or using the installed CLI entrypoint:
-workforce-api
+calendar-backend
 ```
 
 ## MVP day calendar
@@ -173,7 +173,8 @@ Docker enables isolated demo identities. Click **Start isolated demo session** i
 the panel, ask **who is affected**, then try **reschedule before 12:00**. Use the
 earliest/latest time fields to revise constraints. The panel shows exact warning
 and policy evidence, validation results, and session expiry. Apply requires review and explicit approval, and updates only the isolated demo calendar.
-Local Vite development proxies `/api/agent` to port 8000; set
+Local Vite development proxies both `/api` and `/agent` to the unified backend on
+port 8010; set
 `WORKFORCE_AGENT_DEMO_ENABLED=true WORKFORCE_AGENT_SECURE_COOKIES=false` for a local
 HTTP backend. Production identity and GCP components are documented separately.
 

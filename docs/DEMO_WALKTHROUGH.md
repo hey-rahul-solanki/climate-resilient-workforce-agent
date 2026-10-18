@@ -81,10 +81,9 @@ notes/content and event times.
 - `WORKFORCE_BACKGROUND_CHECK_SECONDS` sets the positive polling interval
   (Docker default 30). Per-session note configuration defaults off and requires
   `annotate` permission. External credential grants must include that permission.
-- POST `/api/agent/sessions/{sid}/monitoring` with `{enabled:true|false}` controls
-  configuration; POST `/warning-pass` runs the same pass immediately. GET the
-  session to inspect `monitoring.last_run`, including updated/unchanged/failed
-  per-event results. The UI refreshes enabled status every 10 seconds.
+- Use the MCP `configure_warning_notes` and `annotate_warning_notes` tools through
+  `/agent` to control and run the background note pass. Session results include
+  updated/unchanged/failed per-event details.
 - The backend process must be running; the page need not be open. Monitoring
   stops at session expiry and is not restored after restart. This is an MVP
   in-process scheduler for one worker, not a deployed Cloud Scheduler service.

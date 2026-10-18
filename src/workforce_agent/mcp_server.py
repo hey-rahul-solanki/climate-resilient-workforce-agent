@@ -1,105 +1,94 @@
-"""Local stdio MCP adapter. Credentials are process env, never tool arguments.
+"""Local stdio MCP adapter over the shared agent service.
 
-Tools proxy the authenticated API, so all clients share policy/session logic.
-This server exposes no rescheduling write or approval tool. Note annotation is
-a separately authorized informational write.
+Credentials are process environment, never tool arguments. MCP tools invoke
+the service layer directly and do not depend on FastAPI or its HTTP API.
 """
+import json
 import os
 import re
-import json
+import secrets
 from datetime import date
-from typing import Annotated
-from pydantic import Field, ValidationError
+from typing import Annotated, Literal
 
-import httpx
 from mcp.server.fastmcp import FastMCP
-from workforce_agent.agent import Constraints, Reply, Suggestion, AnnotationReply
+from pydantic import Field
+
+from workforce_agent.agent import (
+    AgentError,
+    AnnotationReply,
+    Constraints,
+    Principal,
+    Reply,
+    Suggestion,
+)
+from workforce_agent.agent_runtime import service
+from workforce_agent.config import get_settings
 from workforce_agent.schemas import SafetyPolicy, WeatherForecast
 from workforce_agent.schemas.calendar import DayCalendarResponse, DayContextSubmission, WarningMatch
 
 mcp = FastMCP('Climate Workforce — validated planning')
 SessionId = Annotated[str, Field(pattern=r'^[A-Za-z0-9_-]{43}$')]
-ActivityId = Annotated[str, Field(min_length=1,max_length=100)]
+ActivityId = Annotated[str, Field(min_length=1, max_length=100)]
 
 
 class MCPServiceError(ValueError):
-    """Sanitized actionable errors; SDK emits a tool error, never credentials."""
+    """Sanitized actionable tool errors; never expose credentials."""
+
     def __init__(self, code, message):
-        self.code=code
+        self.code = code
         super().__init__(f'{code}: {message}')
 
 
-def request(method: str, path: str, body=None, response_model=Reply):
-    if '/sessions/' in path and not re.fullmatch(r'/sessions/[A-Za-z0-9_-]{43}(?:/(?:chat|proposals|monitoring|warning-pass|annotations))?', path):
-        raise MCPServiceError('invalid-input','Invalid session ID')
+def identity() -> Principal:
     token = os.environ.get('WORKFORCE_AGENT_TOKEN')
     if not token:
-        raise MCPServiceError('authentication-required','WORKFORCE_AGENT_TOKEN is required; no anonymous MCP access')
-    base = os.environ.get('WORKFORCE_AGENT_API_URL', 'http://127.0.0.1:8000')
-    try:
-        parsed = httpx.URL(base)
-    except (ValueError,httpx.InvalidURL):
-        raise MCPServiceError('invalid-config','Invalid backend URL') from None
-    if not parsed.host or parsed.username or parsed.password or parsed.query or parsed.fragment or (parsed.scheme != 'https' and not (parsed.scheme=='http' and parsed.host in ('localhost','127.0.0.1','::1'))):
-        raise MCPServiceError('invalid-config','Use HTTPS for remote services or loopback HTTP; credentials must not appear in URLs')
-    try:
-        with httpx.Client(base_url=base, headers={'Authorization': f'Bearer {token}'}, timeout=20,follow_redirects=False) as client:
-            response = client.request(method, f'/api/agent{path}', json=body)
-            if not response.is_success:
-                codes={401:('unauthenticated','Check the configured credential'),403:('forbidden','Missing site/action permission'),404:('not-found','Session/activity not found or not owned by this identity'),409:('conflict','Annotation disabled or proposal state changed; review configuration'),410:('session-expired','Create a new supervisor session'),422:('invalid-input','Check date, constraints and required fields')}
-                code,message=codes.get(response.status_code,('backend-unavailable','Backend rejected the request; retry or inspect service health'))
-                raise MCPServiceError(code,message)
-            try:
-                return response_model.model_validate(response.json())
-            except (ValidationError,ValueError):
-                raise MCPServiceError('invalid-response','Backend returned an invalid structured response; no success asserted') from None
-    except httpx.TimeoutException:
-        raise MCPServiceError('backend-timeout','Backend timed out; read current session state before retrying') from None
-    except httpx.HTTPError:
-        raise MCPServiceError('backend-unavailable','Cannot reach backend; check the configured URL and service health') from None
+        raise MCPServiceError('authentication-required', 'WORKFORCE_AGENT_TOKEN is required; no anonymous MCP access')
+    for configured, claims in get_settings().agent_credentials.items():
+        if secrets.compare_digest(token, configured):
+            return Principal.model_validate(claims)
+    raise MCPServiceError('unauthenticated', 'Configured MCP credential was not recognized')
 
+
+def invoke(action, *args, **kwargs):
+    try:
+        return action(*args, **kwargs)
+    except AgentError as error:
+        code = {401: 'unauthenticated', 403: 'forbidden', 404: 'not-found',
+                409: 'conflict', 410: 'session-expired', 422: 'invalid-input'}.get(error.status, 'service-error')
+        raise MCPServiceError(code, error.message) from error
+    except ValueError as error:
+        raise MCPServiceError('invalid-input', str(error)) from error
+
+
+def checked_session_id(value):
+    if not re.fullmatch(r'[A-Za-z0-9_-]{43}', value or ''):
+        raise MCPServiceError('invalid-input', 'Invalid session ID')
+    return value
 
 
 @mcp.tool()
 def create_supervisor_session(day: date, site_id: str = 'VAD-PLANT-01') -> Reply:
-    """Create an isolated, expiring session authorized for the configured credential."""
-    return request('POST', '/sessions', {'day':day.isoformat(), 'site_id':site_id})
+    """Create an isolated, expiring session for the configured credential."""
+    return invoke(service.create, identity(), day, site_id)
 
 
 @mcp.tool()
-def climate_agent(message: Annotated[str, Field(min_length=1,max_length=2000)],
+def climate_agent(message: Annotated[str, Field(min_length=1, max_length=2000)],
                   day: date | None = None, site_id: str = 'VAD-PLANT-01',
                   session_id: SessionId | None = None) -> Reply:
-    """Primary agent entry point. Uses server-authorized schedule/weather/policy context.
-
-    Start a conversation by providing day and site_id; the backend supplies its
-    available operational context and returns a 30-minute session_id. For follow-up
-    turns, pass that session_id. Do not send client schedules, policies, credentials,
-    or identity claims. Clear requests use deterministic handling; other requests
-    may use the configured reasoning provider. All proposals are deterministically
-    validated and remain pending supervisor review.
-    """
+    """Start or continue a conversation using server-authorized schedule context."""
+    principal = identity()
     if session_id is None:
         if day is None:
-            raise MCPServiceError('invalid-input','Provide day when starting a new session')
-        created = request('POST', '/sessions', {'day':day.isoformat(), 'site_id':site_id})
-        session_id = created.session_id
-    return request('POST', f'/sessions/{session_id}/chat', {'message':message})
+            raise MCPServiceError('invalid-input', 'Provide day when starting a new session')
+        session_id = invoke(service.create, principal, day, site_id).session_id
+    return invoke(service.chat, checked_session_id(session_id), principal, message)
 
 
 @mcp.tool()
 def analyze_consumer_schedule(context: DayContextSubmission, policy: SafetyPolicy) -> DayCalendarResponse:
-    """Analyze a consumer-owned schedule and site policy against backend weather.
-
-    Requires read permission for context.site.id. Provide raw source activities and the
-    applicable site safety policy, without derived status/warning fields. Weather is
-    fetched by the backend. Unavailable, stale, or incomplete evidence yields needs-review.
-    This tool never writes the source calendar.
-    """
-    return request('POST', '/analysis/consumer-schedule', {
-        'context': context.model_dump(mode='json'),
-        'policy': policy.model_dump(mode='json'),
-    }, DayCalendarResponse)
+    """Analyze a submitted schedule against backend-owned weather; never writes the source calendar."""
+    return invoke(service.analyze_consumer_schedule, identity(), context, policy)
 
 
 @mcp.resource('climate://schemas/day-calendar-response')
@@ -120,7 +109,7 @@ def climate_evidence_schema() -> str:
 
 @mcp.resource('climate://schemas/planning-responses')
 def planning_response_schemas() -> str:
-    """Canonical agent reply, proposal and annotation response JSON Schemas."""
+    """Canonical agent reply, proposal and annotation schemas."""
     return json.dumps({
         'Reply': Reply.model_json_schema(),
         'Suggestion': Suggestion.model_json_schema(),
@@ -142,58 +131,72 @@ def climate_usage() -> str:
         'and optional policy reference. Every day-context or session tool requires an authenticated '
         'credential with read permission and access to the requested site. Errors use stable '
         'codes such as authentication-required, forbidden, not-found, invalid-input, and '
-        'backend-unavailable; missing or stale context must be treated as needs-review.'
+        'service-error; missing or stale context must be treated as needs-review.'
     )
 
 
 @mcp.tool()
 def list_affected_activities(session_id: SessionId) -> Reply:
     """Read affected activities with traceable warning intervals and policy context."""
-    return request('GET', f'/sessions/{session_id}')
+    return invoke(service.read, checked_session_id(session_id), identity())
 
 
 @mcp.tool()
 def get_climate_suggestions(session_id: SessionId) -> Reply:
     """Read existing structured suggestions; requires read/site/ownership permission."""
-    return request('GET', f'/sessions/{session_id}')
+    return invoke(service.read, checked_session_id(session_id), identity())
 
 
 @mcp.tool()
 def create_rescheduling_proposal(session_id: SessionId, constraints: Constraints) -> Reply:
-    """Prepare proposals, never change event times. Requires propose permission."""
-    return request('POST', f'/sessions/{session_id}/proposals', constraints.model_dump())
+    """Prepare proposals only; times remain unchanged until the supervisor approval flow."""
+    return invoke(service.request_proposals, checked_session_id(session_id), identity(), constraints)
 
 
 @mcp.tool()
-def supervisor_chat(session_id: SessionId, message: Annotated[str, Field(min_length=1,max_length=2000)]) -> Reply:
-    """Continue a session; clear supported requests use deterministic handling and other intent may use Gemini."""
-    return request('POST', f'/sessions/{session_id}/chat', {'message':message})
-
+def supervisor_chat(session_id: SessionId, message: Annotated[str, Field(min_length=1, max_length=2000)]) -> Reply:
+    """Continue a session; interpretation uses the configured reasoning provider when enabled."""
+    return invoke(service.chat, checked_session_id(session_id), identity(), message)
 
 
 @mcp.tool()
 def configure_warning_notes(session_id: SessionId, enabled: bool) -> Reply:
-    """Explicitly enable/disable informational demo notes; requires annotate permission."""
-    return request('POST', f'/sessions/{session_id}/monitoring', {'enabled':enabled})
+    """Enable or disable separate informational notes; requires annotate permission."""
+    return invoke(service.configure_monitoring, checked_session_id(session_id), identity(), enabled)
 
 
 @mcp.tool()
 def annotate_warning_notes(session_id: SessionId) -> Reply:
-    """Run the idempotent configured note pass; never change event times."""
-    return request('POST', f'/sessions/{session_id}/warning-pass', {})
-
+    """Run the configured informational note pass; never changes event times."""
+    return invoke(service.warning_pass, checked_session_id(session_id), identity())
 
 
 @mcp.tool()
-def propose_reschedule(session_id: SessionId, constraints: Constraints) -> Reply:
-    """Prepare validated proposals only; requires propose/site/ownership authorization. Never applies times."""
-    return request('POST', f'/sessions/{session_id}/proposals', constraints.model_dump())
+def propose_reschedule(session_id: SessionId, constraints: Constraints,
+                       activity_id: Annotated[str | None, Field(min_length=1, max_length=100)] = None) -> Reply:
+    """Prepare validated proposals only; never applies times."""
+    targets = [activity_id] if activity_id else None
+    return invoke(service.request_proposals, checked_session_id(session_id), identity(), constraints, target_ids=targets)
+
+
+@mcp.tool()
+def review_proposal(session_id: SessionId, proposal_id: Annotated[str, Field(min_length=1, max_length=200)]) -> dict:
+    """Refresh current source, climate, availability and duration checks for a proposal."""
+    return invoke(service.review, checked_session_id(session_id), identity(), proposal_id)
+
+
+@mcp.tool()
+def decide_proposal(session_id: SessionId, proposal_id: Annotated[str, Field(min_length=1, max_length=200)],
+                    decision: Literal['approve', 'reject', 'revise'],
+                    reason: Annotated[str, Field(max_length=2000)] = '') -> Reply:
+    """Record an explicit supervisor decision; approval revalidates before demo calendar changes."""
+    return invoke(service.decide, checked_session_id(session_id), identity(), proposal_id, decision, reason)
 
 
 @mcp.tool()
 def annotate_affected_activity(session_id: SessionId, activity_id: ActivityId) -> AnnotationReply:
-    """Annotate one affected outdoor event only when explicitly enabled and authorized. Never changes times."""
-    return AnnotationReply.model_validate(request('POST', f'/sessions/{session_id}/annotations', {'activity_id':activity_id}).model_dump(mode='json'))
+    """Annotate one affected outdoor event only when explicitly enabled and authorized."""
+    return invoke(service.annotate_activity, checked_session_id(session_id), identity(), activity_id)
 
 
 def run():

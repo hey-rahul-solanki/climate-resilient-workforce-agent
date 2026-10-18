@@ -29,10 +29,11 @@ api = [
 [project.scripts]
 workforce-weather = "workforce_agent.weather.cli:main"
 workforce-agent-mcp = "workforce_agent.mcp_server:run"
-workforce-api = "workforce_agent.api:run"
+calendar-backend = "calendar_backend.main:run"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["workforce_agent*", "calendar_backend*"]
 
 [tool.setuptools.package-data]
 workforce_agent = ["locations/*.json"]

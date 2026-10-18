@@ -2,19 +2,22 @@
 
 ## Implemented
 
-The calendar panel calls a backend session service through same-origin `/api/agent`
-requests. Docker enables an **isolated demo identity**, not an enterprise login.
+The calendar panel calls the root-level `calendar_backend` service through same-origin
+`/agent` requests. That service discovers MCP tool schemas and invokes the requested
+tool; the MCP server calls the shared agent service. Docker enables an **isolated demo
+identity**, not an enterprise login.
 Click **Start isolated demo session**. Ask `who is affected`, `reschedule before
 12:00`, `after 08:00`, or `reschedule`. Combined earliest/latest constraints can be
 submitted through the form. Unrecognized or ambiguous requests ask clarification;
 they are never treated as successfully understood natural-language constraints.
 
 The default deterministic agent identity is `climate-workforce/deterministic-v1`.
-`AgentService` is reusable Python application logic. REST and the stdio MCP adapter
-use the same service through the authenticated HTTP API. Proposal generation is not approval. The REST API now supports explicit
-review/decisions for isolated demo calendar updates; MCP still exposes no approval
-or rescheduling write tool. See [the approval workflow](RESCHEDULING_APPROVAL.md). External
-calendar integration remains unconnected.
+`AgentService` is reusable Python application logic. The unified `calendar_backend`
+serves HTTP routes and acts as an MCP client gateway for browser agent calls. The stdio
+MCP server calls the shared service directly. Proposal generation is not approval. It exposes
+fresh proposal review and explicit approval-gated updates to the isolated demo calendar.
+See [the approval workflow](RESCHEDULING_APPROVAL.md). External calendar integration
+remains unconnected.
 
 Existing fixture suggestions and session proposals use the same bounded planner:
 15-minute candidates within the requested site-local window; preserved duration;
@@ -24,25 +27,16 @@ inputs require review. This demo does not model travel, equipment or arbitrary
 site operational rules, and cannot certify an operational schedule. Warnings,
 policy version, original times and validation rationale accompany each proposal.
 
-## REST contract
+## Agent transport
 
-All endpoints except explicitly enabled demo login require a principal. Input and
-output models appear in `/docs` and `/openapi.json`.
+The agent is exposed to the frontend through the MCP gateway only. `GET /agent`
+discovers MCP tool schemas, and `POST /agent` invokes a discovered tool with
+`{name, arguments}`. The legacy `/api/agent/*` and `/api/v1/climate/*` REST adapters
+are not registered by `calendar_backend`; agent requests use MCP instead. Other
+calendar, weather, catalog, safety and planning HTTP routes remain under `/api`.
 
-| Method/path | Permission | Result |
-| --- | --- | --- |
-| POST `/api/agent/demo-login` | demo explicitly enabled | HttpOnly opaque demo identity cookie |
-| POST `/api/agent/sessions` | read + site grant | `{day, site_id}` creates isolated session |
-| GET `/api/agent/sessions/{id}` | owner + read + site | affected activities/evidence |
-| POST `/api/agent/sessions/{id}/chat` | owner + read; propose for proposals | `{message}` answer or clarification |
-| POST `/api/agent/sessions/{id}/proposals` | owner + propose + site | `{earliest, latest}` HH:MM or null |
-| DELETE `/api/agent/sessions/{id}` | owner + read + site | removes session context |
-
-Every reply includes `session_id`, `agent_id`, `mode`, `expires_at`, `message`,
-`clarification`, retained `constraints`, structured `suggestions`, and traceable
-activity `context`. Decision responses distinguish applied demo updates from blocked/failed outcomes. JSON-only
-mutations, non-cacheable responses and SameSite=strict demo cookies are enforced.
-Use HTTPS for anything beyond local development.
+The local demo identity is enabled explicitly. The gateway login sets an HttpOnly,
+SameSite=strict cookie. Use HTTPS beyond local development.
 
 ## Identity, permissions, session lifecycle
 
@@ -91,7 +85,7 @@ operational data. Default credentials are empty: no anonymous bearer API access.
 
 ## MCP
 
-Install `pip install '.[api,mcp]'`. Run `workforce-agent-mcp` (or
+Install `pip install '.[mcp]'`. Run `workforce-agent-mcp` (or
 `python -m workforce_agent.mcp_server`). The server uses the supported MCP Python
 SDK v1 maintenance line with `<2` pinned; it uses stdio only, no public network
 listener. Client configuration:
@@ -102,7 +96,7 @@ listener. Client configuration:
     "climate-workforce": {
       "command": "workforce-agent-mcp",
       "env": {
-        "WORKFORCE_AGENT_API_URL": "http://127.0.0.1:8000",
+        "WORKFORCE_AGENT_CREDENTIALS": "<configured principal mapping>",
         "WORKFORCE_AGENT_TOKEN": "<provisioned server-side credential>"
       }
     }
@@ -110,7 +104,7 @@ listener. Client configuration:
 }
 ```
 
-The API must have the matching credential mapping. Run a separate MCP process per
+The MCP process must have the matching credential mapping. Run a separate MCP process per
 supervisor/workload identity; a process token represents that one identity. No tool
 can select a different principal or receive secrets as arguments. The optional MCP
 process is not automatically started or connected by the web app. The web UI does

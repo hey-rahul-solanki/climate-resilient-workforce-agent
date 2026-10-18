@@ -1,4 +1,4 @@
-"""Minimal local stdio client; configure WORKFORCE_AGENT_TOKEN and API URL first."""
+"""Minimal local stdio client; configure the MCP credential and token first."""
 import asyncio
 import os
 import sys
@@ -16,7 +16,7 @@ async def main():
         raise RuntimeError('Provision a read/propose/site credential in WORKFORCE_AGENT_TOKEN first')
     params=StdioServerParameters(command=sys.executable,args=['-m','workforce_agent.mcp_server'],env={
         'WORKFORCE_AGENT_TOKEN':token,
-        'WORKFORCE_AGENT_API_URL':os.environ.get('WORKFORCE_AGENT_API_URL','http://127.0.0.1:8000'),
+        'WORKFORCE_AGENT_CREDENTIALS':os.environ.get('WORKFORCE_AGENT_CREDENTIALS',''),
     })
     async with stdio_client(params) as (read,write):
         async with ClientSession(read,write) as client:

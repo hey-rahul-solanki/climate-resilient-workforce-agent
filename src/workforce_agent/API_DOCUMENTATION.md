@@ -6,7 +6,7 @@ This document provides comprehensive API specifications for the Climate-Resilien
 
 ## Base URL
 ```
-http://localhost:8000/api
+http://localhost:8010/api
 ```
 
 ## Authentication
